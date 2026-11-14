@@ -170,6 +170,17 @@ export function yearToDate(series: Series, months: YearMonth[], focus: YearMonth
   return { current, typical, anomalyPct: relativeAnomaly(current, typical), years: base.length }
 }
 
+/** Median of each calendar month (Jan..Dec) over the baseline years: the calendar's "typical year" row. */
+export function calendarMedians(series: Series, months: YearMonth[], [y0, y1]: [number, number]): (number | null)[] {
+  const byMonth: number[][] = Array.from({ length: 12 }, () => [])
+  months.forEach((ym, i) => {
+    const { year, month } = parseYm(ym)
+    const v = series[i]
+    if (year >= y0 && year <= y1 && v !== null) byMonth[month - 1].push(v)
+  })
+  return byMonth.map((vals) => (vals.length ? quantile(vals.sort((a, b) => a - b), 0.5) : null))
+}
+
 export interface MonthlyAnomaly {
   month: YearMonth
   value: number

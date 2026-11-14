@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
-import { anomalyBin, anomalyColor, buildCountScale, NO_DATA_FILL, ZERO_FILL } from './colorScale'
+import { anomalyBin, anomalyColor, buildCountScale, displayRound, NO_DATA_FILL, ZERO_FILL } from './colorScale'
 
 describe('buildCountScale', () => {
   const values = [null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100]
@@ -30,6 +30,16 @@ describe('buildCountScale', () => {
     // A narrow range keeps its quantile bins: log bins would merge 10 and 19
     const narrow = buildCountScale([...Array(40).fill(10), 11, 12, 13, 14, 15, 16, 17, 18, 19], { method: 'quantile', bins: 7, palette: 'inferno' })
     expect(narrow.colorOf(10)).not.toBe(narrow.colorOf(19))
+  })
+  it('keeps every printed value inside its printed range', () => {
+    const values = [1.04, 9.96, 12, 17.599, 17.6, 18.2, 36.4, 52, 53.7, 120.4, 181.6, 182.4, 999.5]
+    const s = buildCountScale(values, { method: 'quantile', bins: 7, palette: 'inferno' })
+    expect(s.edges.every((e) => displayRound(e) === e)).toBe(true)
+    for (const v of values) {
+      const i = s.binOf(v)
+      expect(displayRound(v)).toBeGreaterThanOrEqual(s.edges[i])
+      if (i + 1 < s.edges.length) expect(displayRound(v)).toBeLessThan(s.edges[i + 1])
+    }
   })
   it('makes log bins with round numbers', () => {
     const s = buildCountScale([1, 1000], { method: 'log', bins: 3, palette: 'inferno' })

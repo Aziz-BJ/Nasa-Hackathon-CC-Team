@@ -16,8 +16,10 @@ export function inSpan(ym: YearMonth, [first, last]: [YearMonth, YearMonth]): bo
   return ym >= first && ym <= last
 }
 
-export function monthStatus(m: Manifest, ym: YearMonth): MonthStatus {
-  if (!inSpan(ym, m.harmonized_coverage) || ym > m.last_month) return 'no_sensor'
+/** Status of one month for one series: a raw sensor has no data before it launched or after it ended. */
+export function monthStatus(m: Manifest, ym: YearMonth, key: SeriesKey = 'harmonized'): MonthStatus {
+  const span = seriesSpan(m, key)
+  if (!span || !inSpan(ym, span) || ym > m.last_month) return 'no_sensor'
   if (m.month_to_date && ym === m.last_month) return 'partial'
   if (ym >= m.nrt_from) return 'nrt'
   return 'standard'

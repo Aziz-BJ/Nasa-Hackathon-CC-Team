@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { monthRange } from './months'
 import {
-  monthlyAnomalies, percentileOf, quantile, rankOf, relativeAnomaly,
+  calendarMedians, monthlyAnomalies, percentileOf, quantile, rankOf, relativeAnomaly,
   sameMonthBaseline, summarizeMonth, verdictFor, yearToDate,
 } from './indices'
 
@@ -56,5 +56,11 @@ describe('indices', () => {
     const flat = m2.map(() => 10)
     expect(yearToDate(flat, m2, '2000-12', [2000, 2006])).toBeNull()
     expect(yearToDate(flat, m2, '2006-12', [2000, 2006])).toEqual({ current: 120, typical: 120, anomalyPct: 0, years: 5 })
+  })
+  it('gives the typical value of each calendar month', () => {
+    const med = calendarMedians(series, months, [2003, 2006])
+    expect(med[7]).toBe(25) // Augusts 10, 20, 30, 40
+    expect(med[0]).toBe(1)
+    expect(calendarMedians(series, months, [2010, 2012]).every((v) => v === null)).toBe(true)
   })
 })

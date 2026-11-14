@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { buildCountScale } from '../lib/colorScale'
+import { calendarMedians } from '../lib/indices'
 import { monthRange } from '../lib/months'
 import { BurningCalendar } from './BurningCalendar'
 
@@ -12,7 +13,7 @@ const scale = buildCountScale(values, { method: 'quantile', bins: 4, palette: 'i
 
 function setup(onFocusMonth = vi.fn()) {
   render(
-    <BurningCalendar months={months} values={values} from="2011-01" to="2012-12" scale={scale}
+    <BurningCalendar months={months} values={values} from="2011-01" to="2012-12" scale={scale} medians={calendarMedians(values, months, [2011, 2012])}
       statusOf={(ym) => (ym === '2012-12' ? 'partial' : 'standard')} baselineYears={[2011, 2012]}
       seriesLabel="harmonized" legendId="lg" onFocusMonth={onFocusMonth} />,
   )
@@ -27,6 +28,7 @@ describe('BurningCalendar', () => {
     expect(screen.getByLabelText(/Jan 2011: no data/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Jun 2011: 0 hotspots/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Dec 2012: 10 hotspots.*Month to date/)).toBeInTheDocument()
+    expect(screen.getByText(/10 of 12 months/)).toBeInTheDocument() // 2011 has no data for Jan and Feb
   })
   it('moves focus with the arrow keys', () => {
     const onFocusMonth = setup()

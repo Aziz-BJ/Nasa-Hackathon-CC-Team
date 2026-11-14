@@ -3,7 +3,6 @@
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { fmtCount, type CountScale } from '../lib/colorScale'
 import { textClass } from '../lib/contrast'
-import { quantile } from '../lib/indices'
 import { formatYm, labelYm, MONTH_SHORT, parseYm, type YearMonth } from '../lib/months'
 import { STATUS_LABELS, type MonthStatus } from '../lib/status'
 
@@ -13,12 +12,17 @@ export interface BurningCalendarProps {
   from: YearMonth
   to: YearMonth
   scale: CountScale
+  /** Typical value of each calendar month (Jan..Dec) over the baseline years. Include these in the scale. */
+  medians: (number | null)[]
   statusOf: (ym: YearMonth) => MonthStatus
   baselineYears: [number, number]
   seriesLabel: string
   legendId: string
   onFocusMonth?: (ym: YearMonth) => void
 }
+
+/** Months outside the chosen range are shown dimmed and neutral: they are not part of the colour bins. */
+const OUTSIDE_FILL = '#3a3a40'
 
 function toHex(color: string): string {
   const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(color)
@@ -40,24 +44,18 @@ export function BurningCalendar(p: BurningCalendarProps) {
   }
   const inRange = (ym: YearMonth) => ym >= p.from && ym <= p.to
 
+  // Totals over the chosen months only. A year with fewer counted months says so, so it isn't read as a full year.
   const yearTotals = years.map((y) => {
-    let t: number | null = null
+    let total: number | null = null
+    let counted = 0
     for (let m = 1; m <= 12; m++) {
       const ym = formatYm(y, m)
       const v = valueOf(ym)
-      if (inRange(ym) && v !== null) t = (t ?? 0) + v
+      if (inRange(ym) && v !== null) { total = (total ?? 0) + v; counted++ }
     }
-    return t
+    return { total, counted }
   })
-  const maxTotal = Math.max(1, ...yearTotals.map((t) => t ?? 0))
-  const medians = Array.from({ length: 12 }, (_, i) => {
-    const vals = p.months
-      .map((ym, j) => ({ ...parseYm(ym), v: p.values[j] }))
-      .filter((x) => x.month === i + 1 && x.year >= p.baselineYears[0] && x.year <= p.baselineYears[1] && x.v !== null)
-      .map((x) => x.v as number)
-      .sort((a, b) => a - b)
-    return vals.length ? quantile(vals, 0.5) : null
-  })
+  const maxTotal = Math.max(1, ...yearTotals.map((t) => t.total ?? 0))
 
   function describe(ym: YearMonth): string {
     const v = valueOf(ym)
@@ -109,7 +107,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
                   const ym = formatYm(y, mi + 1)
                   const v = valueOf(ym)
                   const status = p.statusOf(ym)
-                  const fill = p.scale.colorOf(v)
+                  const fill = inRange(ym) ? p.scale.colorOf(v) : OUTSIDE_FILL
                   const cls = ['c',
                     v === null ? 'nodata' : v === 0 ? 'zero' : '',
                     inRange(ym) ? '' : 'outside',
@@ -126,8 +124,9 @@ export function BurningCalendar(p: BurningCalendarProps) {
                   )
                 })}
                 <td className="total">
-                  <span className="bar" style={{ width: `${((yearTotals[yi] ?? 0) / maxTotal) * 4}rem` }} aria-hidden />
-                  {yearTotals[yi] === null ? '' : fmtCount(yearTotals[yi] as number)}
+                  <span className={`bar${yearTotals[yi].counted < 12 ? ' part' : ''}`} style={{ width: `${((yearTotals[yi].total ?? 0) / maxTotal) * 4}rem` }} aria-hidden />
+                  {yearTotals[yi].total === null ? '' : fmtCount(yearTotals[yi].total as number)}
+                  {yearTotals[yi].total !== null && yearTotals[yi].counted < 12 && <span className="muted"> ({yearTotals[yi].counted} of 12 months)</span>}
                 </td>
               </tr>
             ))}
@@ -135,7 +134,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
           <tfoot>
             <tr>
               <th scope="row">Median {p.baselineYears[0]}–{p.baselineYears[1]}</th>
-              {medians.map((v, i) => {
+              {p.medians.map((v, i) => {
                 const fill = p.scale.colorOf(v)
                 return (
                   <td key={i} className={`c ${v === null ? 'nodata' : textClass(toHex(fill))}`} style={{ background: fill }}>

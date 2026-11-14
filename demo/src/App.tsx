@@ -24,12 +24,12 @@ import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
-import { buildCountScale } from './lib/colorScale'
-import { summarizeMonth, VERDICT_LABELS } from './lib/indices'
+import { buildCountScale, fmtCount } from './lib/colorScale'
+import { calendarMedians, summarizeMonth, VERDICT_LABELS } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
-import { SERIES_LABELS, type Manifest } from './lib/types'
+import { SERIES_LABELS, type Manifest, type SeriesKey } from './lib/types'
 import { initialState, quickRanges, reducer, type AppState } from './state/appState'
 
 export default function App() {
@@ -75,10 +75,12 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const seriesLabel = SERIES_LABELS[s.source]
   const ready = !!series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
 
+  // The calendar's median row is coloured too, so the medians join the bins and the legend covers them.
+  const medians = useMemo(() => (series ? calendarMedians(values, series.months, m.baseline_years) : []), [series, values, m.baseline_years])
   const calendarScale = useMemo(() => buildCountScale(
-    s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values,
+    [...(s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values), ...medians],
     { ...RAMP, palette: s.palette },
-  ), [values, i0, i1, s.scaleTo, s.palette])
+  ), [values, medians, i0, i1, s.scaleTo, s.palette])
 
   const { cells, mapScale } = useMemo(() => {
     if (!data.selection || i0 < 0) return { cells: EMPTY_FC, mapScale: null }
@@ -117,10 +119,10 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
       body: () => !ready ? needsArea : <>
         <Legend id="cal-legend" scale={calendarScale} showNrt
           title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
-        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
-          statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
+        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale} medians={medians}
+          statusOf={(ym) => monthStatus(m, ym, s.source)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
           legendId="cal-legend" onFocusMonth={setHoverMonth} />
-        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
+        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} source={s.source} />
       </> },
   ]
   const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
@@ -174,6 +176,8 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const headline: ReactNode = !s.area ? 'Choose an area to begin.'
     : data.coverage === 'none' ? 'No data is loaded for this area yet.'
     : !focus || focus.value === null ? `${s.area.label}: loading…`
+    // A month that is not finished gets no verdict: its total is still growing.
+    : monthStatus(m, s.to) === 'partial' ? <><strong>{longLabelYm(s.to)}</strong> (month to date): {fmtCount(focus.value)} hotspots so far · not comparable until the month ends</>
     : <><strong>{longLabelYm(s.to)}</strong>: {Math.round(focus.value).toLocaleString('en-GB')} hotspots
         {focus.verdict && focus.percentile !== null && <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile)</>}</>
 
@@ -216,17 +220,23 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   )
 }
 
-function CellDetail({ ym, values, months, manifest, seriesLabel }: {
-  ym: YearMonth | null; values: (number | null)[]; months: YearMonth[]; manifest: Manifest; seriesLabel: string
+function CellDetail({ ym, values, months, manifest, seriesLabel, source }: {
+  ym: YearMonth | null; values: (number | null)[]; months: YearMonth[]; manifest: Manifest; seriesLabel: string; source: SeriesKey
 }) {
   if (!ym) return <p className="cell-detail muted small">Hover or use the arrow keys on the calendar to see one month in detail.</p>
   const sum = summarizeMonth(values, months, ym, manifest.baseline_years)
   const sensors = sensorsIn(manifest, ym).map((x) => x.label).join(', ') || 'none'
+  const [y0, y1] = manifest.baseline_years
+  let compare = ''
+  if (monthStatus(manifest, ym, source) === 'partial') compare = 'Month to date: not comparable with full months yet. '
+  else if (sum.rank && sum.baseline && sum.value !== null) {
+    const med = sum.baseline.median
+    compare = `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; `
+      + (med > 0 ? `${Math.round((sum.value / med) * 100)}% of the ${y0}–${y1} median (${fmtCount(med)}). ` : `the ${y0}–${y1} median is 0. `)
+  }
   return (
     <p className="cell-detail" aria-live="polite">
-      <strong>{labelYm(ym)}</strong>: {sum.value === null ? 'no data' : `${Math.round(sum.value).toLocaleString('en-GB')} hotspots detected`} ({seriesLabel}).{' '}
-      {sum.rank && sum.vsMedianPct !== null && `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${Math.round(100 + sum.vsMedianPct)}% of the ${manifest.baseline_years[0]}–${manifest.baseline_years[1]} median (${Math.round(sum.baseline!.median)}). `}
-      Sensors: {sensors}.
+      <strong>{labelYm(ym)}</strong>: {sum.value === null ? 'no data' : `${fmtCount(sum.value)} hotspots detected`} ({seriesLabel}). {compare}Sensors: {sensors}.
     </p>
   )
 }

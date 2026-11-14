@@ -25,6 +25,14 @@ export interface CountScale {
   labels: string[]
 }
 
+/**
+ * The value as the app prints it: one decimal below 10, whole numbers from 10. Bin edges are rounded the same way
+ * and values are binned by this rounded value, so a printed number always sits inside its printed range.
+ */
+export function displayRound(v: number): number {
+  return Math.abs(v) < 10 ? Math.round(v * 10) / 10 : Math.round(v)
+}
+
 export function fmtCount(v: number): string {
   if (v === 0) return '0'
   if (Math.abs(v) < 10) return (Math.round(v * 10) / 10).toLocaleString('en-GB')
@@ -42,14 +50,14 @@ export function buildCountScale(
   opts: { method: RampMethod; bins: number; palette: PaletteId },
 ): CountScale {
   const pos = values.filter((v): v is number => v !== null && v > 0).sort((a, b) => a - b)
-  const min = pos[0] ?? 1
+  const min = displayRound(pos[0] ?? 1)
   const max = pos[pos.length - 1] ?? 1
   const make = (method: RampMethod) => {
     const t: number[] = []
     for (let k = 1; k < opts.bins; k++) {
       t.push(method === 'quantile' ? quantile(pos, k / opts.bins) : nice(min * (max / min) ** (k / opts.bins)))
     }
-    return [...new Set(t.map((x) => Math.round(x * 10) / 10))].filter((x) => x > min && x <= max)
+    return [...new Set(t.map(displayRound))].filter((x) => x > min && x <= max)
   }
   let thresholds: number[] = []
   if (pos.length > 1) {
@@ -67,8 +75,9 @@ export function buildCountScale(
   const n = edges.length
   const colors = edges.map((_, i) => interp(0.2 + 0.78 * (n === 1 ? 1 : i / (n - 1))))
   const binOf = (v: number) => {
+    const d = displayRound(v)
     let i = 0
-    while (i + 1 < n && v >= edges[i + 1]) i++
+    while (i + 1 < n && d >= edges[i + 1]) i++
     return i
   }
   const labels = edges.map((lo, i) => (i + 1 < n ? `${fmtCount(lo)} to <${fmtCount(edges[i + 1])}` : `${fmtCount(lo)} to ${fmtCount(max)}`))
