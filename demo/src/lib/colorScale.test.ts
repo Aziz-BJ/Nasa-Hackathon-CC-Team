@@ -27,6 +27,9 @@ describe('buildCountScale', () => {
     const s = buildCountScale(skewed, { method: 'quantile', bins: 7, palette: 'inferno' })
     expect(s.edges.length).toBeGreaterThan(2)
     expect(s.colorOf(1)).not.toBe(s.colorOf(1000))
+    // A narrow range keeps its quantile bins: log bins would merge 10 and 19
+    const narrow = buildCountScale([...Array(40).fill(10), 11, 12, 13, 14, 15, 16, 17, 18, 19], { method: 'quantile', bins: 7, palette: 'inferno' })
+    expect(narrow.colorOf(10)).not.toBe(narrow.colorOf(19))
   })
   it('makes log bins with round numbers', () => {
     const s = buildCountScale([1, 1000], { method: 'log', bins: 3, palette: 'inferno' })

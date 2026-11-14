@@ -55,9 +55,12 @@ export function buildCountScale(
   if (pos.length > 1) {
     thresholds = make(opts.method)
     // Many tied low counts (lots of 1s and 2s) collapse quantile bins, so 2 and 1000 would share a colour.
-    // Then log bins keep the high values apart.
+    // Then log bins keep the high values apart, if they give more bins (they don't for a narrow range).
     const distinct = new Set(pos).size
-    if (opts.method === 'quantile' && thresholds.length + 1 < Math.min(opts.bins, distinct)) thresholds = make('log')
+    if (opts.method === 'quantile' && thresholds.length + 1 < Math.min(opts.bins, distinct)) {
+      const log = make('log')
+      if (log.length > thresholds.length) thresholds = log
+    }
   }
   const edges = [min, ...thresholds]
   const interp = PALETTES[opts.palette].interpolate
