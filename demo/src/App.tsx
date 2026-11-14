@@ -1,21 +1,23 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// Checkpoint 2 version: globe, Area and Layers, bottom strip and guide. Replaced at checkpoint 3.
+// Checkpoint 3 version: adds Dates and Calendar. Replaced at checkpoint 4.
 // Map-first layout: the globe fills the screen; feature boxes around it open side drawers;
 // the bottom strip holds the legend, a one-line verdict and "More info".
-import { Info, MapPin, Stack } from '@phosphor-icons/react'
-import { useCallback, useMemo, useReducer, useState, type ReactNode } from 'react'
+import { CalendarBlank, Info, MapPin, Stack, Table } from '@phosphor-icons/react'
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
 import { AboutPage } from './components/AboutPage'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
+import { BurningCalendar } from './components/BurningCalendar'
 import { DisplayOptions } from './components/DisplayOptions'
 import { GlobeMap } from './components/GlobeMap'
-import { CompactLegend } from './components/Legend'
+import { CompactLegend, Legend } from './components/Legend'
 import { MockBanner } from './components/MockBanner'
 import { BottomStrip } from './components/shell/BottomStrip'
 import { Drawer } from './components/shell/Drawer'
 import { FeatureRail, type FeatureBox } from './components/shell/FeatureRail'
 import { GuideTour, guideSeen, markGuideSeen, type GuideStep } from './components/shell/GuideTour'
 import { TopBar } from './components/shell/TopBar'
+import { TimeRangePicker } from './components/TimeRangePicker'
 import { RAMP } from './config'
 import { dataSource } from './dataSource'
 import { useAreaData } from './hooks/useAreaData'
@@ -25,9 +27,10 @@ import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
 import { summarizeMonth, VERDICT_LABELS } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
-import { labelYm, longLabelYm } from './lib/months'
-import type { Manifest } from './lib/types'
-import { initialState, reducer, type AppState } from './state/appState'
+import { labelYm, longLabelYm, type YearMonth } from './lib/months'
+import { monthStatus, sensorsIn } from './lib/status'
+import { SERIES_LABELS, type Manifest } from './lib/types'
+import { initialState, quickRanges, reducer, type AppState } from './state/appState'
 
 export default function App() {
   const { manifest, overview, reported, error } = useDataset(dataSource)
@@ -57,16 +60,25 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 
   const data = useAreaData(dataSource, m, s.area)
   const [drawError, setDrawError] = useState<string | null>(null)
+  const [hoverMonth, setHoverMonth] = useState<YearMonth | null>(null)
   const [panel, setPanel] = useState<string | null>(null)
   // What each drawer shows. Kept after closing so the drawer slides out with its content.
   const [shown, setShown] = useState<Record<Side, string | null>>({ left: null, right: s.view === 'about' ? 'about' : null })
   const [more, setMore] = useState(false)
   const [guide, setGuide] = useState(() => !guideSeen())
+  useEffect(() => setHoverMonth(null), [s.area, s.source])
 
   const series = data.series
   const i0 = series ? series.months.indexOf(s.from) : -1
   const i1 = series ? series.months.indexOf(s.to) : -1
   const values = useMemo(() => series?.values[s.source] ?? [], [series, s.source])
+  const seriesLabel = SERIES_LABELS[s.source]
+  const ready = !!series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
+
+  const calendarScale = useMemo(() => buildCountScale(
+    s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values,
+    { ...RAMP, palette: s.palette },
+  ), [values, i0, i1, s.scaleTo, s.palette])
 
   const { cells, mapScale } = useMemo(() => {
     if (!data.selection || i0 < 0) return { cells: EMPTY_FC, mapScale: null }
@@ -77,6 +89,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const overviewFc = useMemo(() => (overview ? overviewToFeatures(overview, s.palette) : EMPTY_FC), [overview, s.palette])
 
   const focus = series ? summarizeMonth(values, series.months, s.to, m.baseline_years) : null
+  const needsArea = <p className="muted">Choose an area with data first (Area box on the left).</p>
 
   const panels: Panel[] = [
     { id: 'area', side: 'left', label: 'Area', icon: <MapPin aria-hidden />, title: 'Choose an area',
@@ -87,6 +100,10 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
           onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
         <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
       </> },
+    { id: 'dates', side: 'left', label: 'Dates', icon: <CalendarBlank aria-hidden />, title: 'Choose months',
+      guide: 'Choose the months to look at. Colours rescale to the months you pick.',
+      body: () => <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
+        quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} /> },
     { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
       guide: 'Switch between the harmonized record and raw MODIS or VIIRS, and change colours, imagery and labels.',
       body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
@@ -95,6 +112,16 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
         onPalette={(palette) => dispatch({ type: 'setPalette', palette })}
         onBasemap={(basemap) => dispatch({ type: 'setBasemap', basemap })}
         onLabels={(labels) => dispatch({ type: 'setLabels', labels })} /> },
+    { id: 'calendar', side: 'right', wide: true, label: 'Calendar', icon: <Table aria-hidden />, title: 'Burning calendar',
+      guide: 'Every month since 2000 as a grid: which seasons and which years had the most hotspots.',
+      body: () => !ready ? needsArea : <>
+        <Legend id="cal-legend" scale={calendarScale} showNrt
+          title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
+        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
+          statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
+          legendId="cal-legend" onFocusMonth={setHoverMonth} />
+        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
+      </> },
   ]
   const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
     guide: '', body: () => <AboutPage manifest={m} /> }
@@ -186,5 +213,20 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
         </>} />
       {guide && <GuideTour steps={guideSteps} onClose={closeGuide} />}
     </div>
+  )
+}
+
+function CellDetail({ ym, values, months, manifest, seriesLabel }: {
+  ym: YearMonth | null; values: (number | null)[]; months: YearMonth[]; manifest: Manifest; seriesLabel: string
+}) {
+  if (!ym) return <p className="cell-detail muted small">Hover or use the arrow keys on the calendar to see one month in detail.</p>
+  const sum = summarizeMonth(values, months, ym, manifest.baseline_years)
+  const sensors = sensorsIn(manifest, ym).map((x) => x.label).join(', ') || 'none'
+  return (
+    <p className="cell-detail" aria-live="polite">
+      <strong>{labelYm(ym)}</strong>: {sum.value === null ? 'no data' : `${Math.round(sum.value).toLocaleString('en-GB')} hotspots detected`} ({seriesLabel}).{' '}
+      {sum.rank && sum.vsMedianPct !== null && `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${Math.round(100 + sum.vsMedianPct)}% of the ${manifest.baseline_years[0]}–${manifest.baseline_years[1]} median (${Math.round(sum.baseline!.median)}). `}
+      Sensors: {sensors}.
+    </p>
   )
 }
