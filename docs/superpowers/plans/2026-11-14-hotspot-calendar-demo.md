@@ -30,7 +30,7 @@
 - Pitfalls already solved, so don't "fix" them back:
   1. `maplibre-gl` 6 has **no default export**: use `import { Map } from 'maplibre-gl'`.
   2. MapLibre 6 loads its web worker relative to its own file, and Vite breaks that path in dev and in builds. Fixed with `setWorkerUrl(workerUrl)` and `import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'` (in `GlobeMap.tsx`).
-  3. NASA GIBS reference-label tiles sometimes return HTTP 500. MapLibre skips them; we only log them.
+  3. Don't use NASA GIBS overlay layers (`Reference_Features_15m`, `Reference_Labels_15m`, `Coastlines_15m`) on the globe. Many of their tiles come back opaque black or as HTTP 500, and MapLibre's globe draws each failed tile as a black square over everything, hiding the data. Only the base imagery (Blue Marble, Black Marble) is used. (Found when Aziz reviewed Checkpoint 2 in a real browser.)
   4. An `<option>` text, or "Median 2003–2025", can match a test locator. The tests use exact or scoped locators.
   5. White text on mid-tone ramp colours fails 4.5:1. The calendar picks black or white text by WCAG contrast, which always gives at least 4.58:1.
   6. A month-to-date total is not comparable with full months. The default range therefore ends at the last *complete* month.
@@ -75,7 +75,7 @@
 ## 2. Key design decisions
 
 ### 2.1 Globe and drawing
-MapLibre GL JS 6 with `projection: { type: 'globe' }`. At low zoom it is a globe; zooming in turns it into a flat map, like Google Maps. Imagery comes from NASA GIBS (Blue Marble day, Black Marble night lights), with GIBS reference borders and labels on top. Using GIBS adds a second NASA resource. Terra Draw draws the shapes; the circle uses `projection: 'globe'`, so circles are geodesic. Drawn shapes become an `Area` and are shown with a Neon Yellow outline. Typed coordinates are the keyboard route, so drawing is never the only way.
+MapLibre GL JS 6 with `projection: { type: 'globe' }`. At low zoom it is a globe; zooming in turns it into a flat map, like Google Maps. Imagery comes from NASA GIBS (Blue Marble day, Black Marble night lights). There are no GIBS overlay layers (pitfall 3). Using GIBS adds a second NASA resource. Terra Draw draws the shapes; the circle uses `projection: 'globe'`, so circles are geodesic. Drawn shapes become an `Area` and are shown with a Neon Yellow outline. Typed coordinates are the keyboard route, so drawing is never the only way.
 
 ### 2.2 Colour ramps relative to the time range
 - **Map cells:** each cell's total over the chosen months. Bins are rebuilt from those totals, so the full ramp is always used.
@@ -2602,16 +2602,13 @@ export const MAP_STYLE: StyleSpecification = {
       attribution: 'Imagery: NASA GIBS (Blue Marble)' },
     night: { type: 'raster', tileSize: 256, maxzoom: 8, tiles: [gibs('VIIRS_Black_Marble', 8, 'png', '2016-01-01')],
       attribution: 'Imagery: NASA GIBS (Black Marble)' },
-    features: { type: 'raster', tileSize: 256, maxzoom: 13, tiles: [gibs('Reference_Features_15m', 13, 'png')] },
-    labels: { type: 'raster', tileSize: 256, maxzoom: 13, tiles: [gibs('Reference_Labels_15m', 13, 'png')],
-      attribution: 'Reference layers: NASA GIBS, © OpenStreetMap contributors' },
+    // No GIBS overlay layers (Reference_Features/Labels_15m, Coastlines_15m): many of their tiles come back opaque
+    // black or as HTTP 500, and MapLibre's globe draws each failed tile as a black square over everything.
   },
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#07173F' } },
     { id: 'day', type: 'raster', source: 'day' },
     { id: 'night', type: 'raster', source: 'night', layout: { visibility: 'none' } },
-    { id: 'features', type: 'raster', source: 'features' },
-    { id: 'labels', type: 'raster', source: 'labels' },
   ],
 }
 
@@ -2625,12 +2622,13 @@ export interface GlobeMapProps {
   overview: GeoJSON.FeatureCollection
   tool: DrawTool
   basemap: Basemap
+  /** Reserved for a borders/labels overlay (see plan section 2.1); not drawn yet. */
   labels: boolean
   /** Called once when the user finishes drawing a shape. */
   onDrawn: (area: Area) => void
 }
 
-export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn }: GlobeMapProps) {
+export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: GlobeMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
@@ -2654,10 +2652,10 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
     map.addControl(new NavigationControl({ visualizePitch: false }), 'top-right')
     map.on('load', () => {
       map.addSource('overview', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } }, 'features')
+      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } })
       map.addSource('cells', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.85 } }, 'features')
-      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#07173F', 'line-width': 0.5 } }, 'features')
+      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.85 } })
+      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#07173F', 'line-width': 0.5 } })
       map.addSource('area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({ id: 'area', type: 'line', source: 'area', paint: { 'line-color': '#EAFE07', 'line-width': 2.5 } })
 
@@ -2721,9 +2719,7 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
     if (!ready || !map) return
     map.setLayoutProperty('day', 'visibility', basemap === 'day' ? 'visible' : 'none')
     map.setLayoutProperty('night', 'visibility', basemap === 'night' ? 'visible' : 'none')
-    map.setLayoutProperty('labels', 'visibility', labels ? 'visible' : 'none')
-    map.setLayoutProperty('features', 'visibility', labels ? 'visible' : 'none')
-  }, [ready, basemap, labels])
+  }, [ready, basemap])
 
   if (failed) {
     return (
@@ -3269,7 +3265,7 @@ export function DisplayOptions(p: DisplayOptionsProps) {
           <option value="night">Black Marble (night lights)</option>
         </select>
       </label>
-      <label><input type="checkbox" checked={p.labels} onChange={(e) => p.onLabels(e.target.checked)} /> Borders and place names</label>
+      <label><input type="checkbox" checked={p.labels} onChange={(e) => p.onLabels(e.target.checked)} /> Coastlines</label>
     </fieldset>
   )
 }
@@ -4750,7 +4746,6 @@ Parts of this code were generated with AI assistance (Claude) and reviewed by th
 | NASA FIRMS | MODIS C6.1 (Terra + Aqua) active fire, 1 km | NASA open data, no restriction; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
 | NASA FIRMS | VIIRS 375 m active fire (Suomi NPP, NOAA-20) | NASA open data, no restriction; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
 | NASA GIBS | BlueMarble_ShadedRelief_Bathymetry, VIIRS_Black_Marble (2016) | NASA open data; credit NASA GIBS | https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api |
-| NASA GIBS | Reference_Features_15m, Reference_Labels_15m | Derived from OpenStreetMap; © OpenStreetMap contributors (ODbL) | https://www.openstreetmap.org/copyright |
 
 ## Software (exact versions in demo/package-lock.json)
 | Library | Version | Licence | URL |

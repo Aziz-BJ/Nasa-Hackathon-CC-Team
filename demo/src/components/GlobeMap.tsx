@@ -26,16 +26,13 @@ export const MAP_STYLE: StyleSpecification = {
       attribution: 'Imagery: NASA GIBS (Blue Marble)' },
     night: { type: 'raster', tileSize: 256, maxzoom: 8, tiles: [gibs('VIIRS_Black_Marble', 8, 'png', '2016-01-01')],
       attribution: 'Imagery: NASA GIBS (Black Marble)' },
-    features: { type: 'raster', tileSize: 256, maxzoom: 13, tiles: [gibs('Reference_Features_15m', 13, 'png')] },
-    labels: { type: 'raster', tileSize: 256, maxzoom: 13, tiles: [gibs('Reference_Labels_15m', 13, 'png')],
-      attribution: 'Reference layers: NASA GIBS, © OpenStreetMap contributors' },
+    // No GIBS overlay layers (Reference_Features/Labels_15m, Coastlines_15m): many of their tiles come back opaque
+    // black or as HTTP 500, and MapLibre's globe draws each failed tile as a black square over everything.
   },
   layers: [
     { id: 'background', type: 'background', paint: { 'background-color': '#07173F' } },
     { id: 'day', type: 'raster', source: 'day' },
     { id: 'night', type: 'raster', source: 'night', layout: { visibility: 'none' } },
-    { id: 'features', type: 'raster', source: 'features' },
-    { id: 'labels', type: 'raster', source: 'labels' },
   ],
 }
 
@@ -49,12 +46,13 @@ export interface GlobeMapProps {
   overview: GeoJSON.FeatureCollection
   tool: DrawTool
   basemap: Basemap
+  /** Reserved for a borders/labels overlay (see plan section 2.1); not drawn yet. */
   labels: boolean
   /** Called once when the user finishes drawing a shape. */
   onDrawn: (area: Area) => void
 }
 
-export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn }: GlobeMapProps) {
+export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: GlobeMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
@@ -78,10 +76,10 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
     map.addControl(new NavigationControl({ visualizePitch: false }), 'top-right')
     map.on('load', () => {
       map.addSource('overview', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } }, 'features')
+      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } })
       map.addSource('cells', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.85 } }, 'features')
-      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#07173F', 'line-width': 0.5 } }, 'features')
+      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.85 } })
+      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#07173F', 'line-width': 0.5 } })
       map.addSource('area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({ id: 'area', type: 'line', source: 'area', paint: { 'line-color': '#EAFE07', 'line-width': 2.5 } })
 
@@ -145,9 +143,7 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
     if (!ready || !map) return
     map.setLayoutProperty('day', 'visibility', basemap === 'day' ? 'visible' : 'none')
     map.setLayoutProperty('night', 'visibility', basemap === 'night' ? 'visible' : 'none')
-    map.setLayoutProperty('labels', 'visibility', labels ? 'visible' : 'none')
-    map.setLayoutProperty('features', 'visibility', labels ? 'visible' : 'none')
-  }, [ready, basemap, labels])
+  }, [ready, basemap])
 
   if (failed) {
     return (
