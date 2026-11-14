@@ -25,7 +25,7 @@
 - Commits made by Claude end with the `Co-Authored-By` line from the session instructions.
 
 **What was already proven on 14 Nov 2026 (throwaway spike).** Every code block below was typechecked with `tsc -b` (strict) and run:
-- 66 unit tests and 19 Playwright tests (desktop and phone, including axe accessibility and the guide) pass.
+- 68 unit tests and 19 Playwright tests (desktop and phone, including axe accessibility and the guide) pass.
 - MapLibre 6 globe + NASA GIBS Blue Marble tiles + Terra Draw circle drawing work in dev, in the production build, and in headless Chromium.
 - Pitfalls already solved, so don't "fix" them back:
   1. `maplibre-gl` 6 has **no default export**: use `import { Map } from 'maplibre-gl'`.
@@ -47,6 +47,7 @@
      - The coordinate type switch uses native radio buttons (valid ARIA, arrow keys).
      - The skip link targets `#main`, which exists on both pages.
   10. Redesigned after Aziz reviewed Checkpoint 2 (the first layout looked like a slide deck): map-first layout with Apple-style dark glass (sections 1 and 2.6). Drawers stay mounted and are `inert` while closed, so closed panels are invisible to tests and screen readers. The scrolling More info area is focusable so keyboard users can scroll it.
+  11. Found by the redesign verifier and fixed: focus returns to the About and Guide buttons when those close; Esc in the guide doesn't also close a drawer; the top pill always opens Area; both drawers are always in the page so the first opening slides; an empty box group isn't drawn; on phones the guide card sits above the box it points at, the boxes follow the strip's real height (`--strip-h` set from the strip), and a drawer and More info don't open together.
 - **Background browser tabs don't render WebGL.** If the globe looks blank while you test in a hidden pane or a background tab, bring the tab to the front before debugging.
 
 **TO CONFIRM (asks for the team, none of them block Checkpoints 1 to 5):**
@@ -166,9 +167,9 @@ Each checkpoint ends with a stop: run the checks, show Aziz the result, commit a
 | # | Name | Tasks | Aziz sees | Proof |
 | --- | --- | --- | --- | --- |
 | 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 42 pass; `npm run build` exits 1 |
-| 2 | Map-first shell and area | 9–13 | Full-screen globe, boxes and drawers, bottom strip, guide; choose an area 4 ways | 55 pass; manual check list |
-| 3 | Calendar and colour ramps | 14–16 | Dates and Calendar boxes, colours that rescale | 61 pass; manual check list |
-| 4 | Indices, charts, download | 17–22 | Summary cards, Trends, Sensors, Reported, Download and share | 66 pass; manual check list |
+| 2 | Map-first shell and area | 9–13 | Full-screen globe, boxes and drawers, bottom strip, guide; choose an area 4 ways | 57 pass; manual check list |
+| 3 | Calendar and colour ramps | 14–16 | Dates and Calendar boxes, colours that rescale | 63 pass; manual check list |
+| 4 | Indices, charts, download | 17–22 | Summary cards, Trends, Sensors, Reported, Download and share | 68 pass; manual check list |
 | 5 | Ready to publish | 23–26 | e2e + axe green on desktop and phone, docs, QA sign-off | `npm run test:e2e` 19 pass |
 | 6 | Real data (after the pipeline delivers) | 27 | Same app on FIRMS data | build passes, no banner |
 
@@ -2332,6 +2333,7 @@ table.calendar td.total .bar { display: inline-block; height: 0.5rem; border-rad
   .strip-headline { flex: 1 1 0; min-width: 0; font-size: 0.8125rem; }
   .legend-compact .swatch { width: 1.9rem; }
   .legend-compact li:nth-child(n+4):not(:last-child) .tick { visibility: hidden; }
+  .strip-more-wrap[data-open='true'] > .strip-more { max-height: 46vh; }
   .drawer, .drawer-wide { left: 10px; right: 10px; width: auto; top: calc(var(--banner-h) + var(--top-h) + 16px); bottom: calc(var(--strip-h) + 92px); }
   .drawer-left[data-open='false'], .drawer-right[data-open='false'] { transform: translateY(24px) scale(0.98); }
   .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 92px); }
@@ -3274,7 +3276,8 @@ describe('FeatureRail and Drawer', () => {
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { GuideTour, guideSeen, markGuideSeen } from './GuideTour'
+import { Drawer } from './Drawer'
+import { cardStyle, GuideTour, guideSeen, markGuideSeen } from './GuideTour'
 
 const steps = [
   { target: null, title: 'Welcome', text: 'Intro' },
@@ -3307,6 +3310,24 @@ describe('GuideTour', () => {
     expect(guideSeen()).toBe(false)
     markGuideSeen()
     expect(guideSeen()).toBe(true)
+  })
+  it('gives focus back on close, and its Esc does not close a drawer underneath', async () => {
+    const onGuideClose = vi.fn()
+    const onDrawerClose = vi.fn()
+    const { rerender } = render(<><button>Guide</button><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer></>)
+    screen.getByRole('button', { name: 'Guide' }).focus()
+    rerender(<><button>Guide</button><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer><GuideTour steps={steps} onClose={onGuideClose} /></>)
+    await userEvent.keyboard('{Escape}')
+    expect(onGuideClose).toHaveBeenCalledTimes(1)
+    expect(onDrawerClose).not.toHaveBeenCalled()
+    rerender(<><button>Guide</button><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer></>)
+    expect(screen.getByRole('button', { name: 'Guide' })).toHaveFocus()
+  })
+  it('places the card above a target it cannot sit beside', () => {
+    // Phone: 390 wide, a box near the bottom
+    const box = { left: 11, right: 83, top: 608, bottom: 675, width: 72, height: 67 } as DOMRect
+    const style = cardStyle(box, 390, 844)
+    expect(Number(style.top) + 230).toBeLessThanOrEqual(box.top)
   })
 })
 ```
@@ -3345,7 +3366,7 @@ export function TopBar({ selection, onSelectionClick, onGuide, onAbout }: TopBar
       </button>
       <div className="topbar-actions">
         <button type="button" className="round-btn" data-tour="guide" aria-label="Guide" title="Guide" onClick={onGuide}><Question weight="bold" aria-hidden /></button>
-        <button type="button" className="round-btn" aria-label="About" title="About and methods" onClick={onAbout}><Info weight="bold" aria-hidden /></button>
+        <button type="button" className="round-btn" data-tour="about" aria-label="About" title="About and methods" onClick={onAbout}><Info weight="bold" aria-hidden /></button>
       </div>
     </header>
   )
@@ -3373,6 +3394,7 @@ export interface FeatureRailProps {
 }
 
 export function FeatureRail({ side, label, boxes, open, onToggle }: FeatureRailProps) {
+  if (boxes.length === 0) return null
   return (
     <nav className={`rail rail-${side}`} aria-label={label}>
       {boxes.map((b) => (
@@ -3413,7 +3435,7 @@ export function Drawer({ open, side, wide = false, title, onClose, children }: D
   useEffect(() => { if (open) ref.current?.focus() }, [open, title])
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onCloseRef.current() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])
@@ -3436,7 +3458,7 @@ export function Drawer({ open, side, wide = false, title, onClose, children }: D
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // The small bar along the bottom: what the colours mean, a one-line verdict, and "More info".
 import { CaretDown, CaretUp } from '@phosphor-icons/react'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 export interface BottomStripProps {
   legend: ReactNode
@@ -3448,8 +3470,18 @@ export interface BottomStripProps {
 }
 
 export function BottomStrip({ legend, headline, expanded, onToggle, more }: BottomStripProps) {
+  const ref = useRef<HTMLElement>(null)
+  // Everything that floats above the strip reads --strip-h, so it never ends up underneath it.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const root = document.documentElement
+    const ro = new ResizeObserver(() => root.style.setProperty('--strip-h', `${Math.ceil(el.getBoundingClientRect().height)}px`))
+    ro.observe(el)
+    return () => { ro.disconnect(); root.style.removeProperty('--strip-h') }
+  }, [])
   return (
-    <section className="strip" aria-label="Legend and summary" data-tour="strip">
+    <section ref={ref} className="strip" aria-label="Legend and summary" data-tour="strip">
       <div className="strip-more-wrap" data-open={expanded} inert={!expanded} aria-hidden={!expanded}>
         {/* Focusable when open, so keyboard users can scroll a long summary. */}
         <div className="strip-more" id="strip-more" role="region" aria-label="Summary details" tabIndex={expanded ? 0 : -1}>{more}</div>
@@ -3496,17 +3528,18 @@ export function markGuideSeen() {
 }
 
 const CARD_W = 320
+const CARD_H = 230
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(x, hi))
 
-function cardStyle(r: DOMRect | null): CSSProperties {
+/** Beside the target if it fits, otherwise above it (or below), never on top of it. */
+export function cardStyle(r: DOMRect | null, vw = window.innerWidth, vh = window.innerHeight): CSSProperties {
   if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  let left = r.right + 16
-  if (left + CARD_W > vw - 8) left = r.left - CARD_W - 16
-  if (left < 8) left = Math.min(Math.max(8, r.left), vw - CARD_W - 8)
-  let top = r.top
-  if (top + 220 > vh - 8) top = Math.max(8, r.top - 230)
-  return { left, top }
+  const w = Math.min(CARD_W, vw - 20)
+  const top = clamp(r.top, 8, vh - CARD_H - 8)
+  if (r.right + 16 + w <= vw - 8) return { left: r.right + 16, top }
+  if (r.left - 16 - w >= 8) return { left: r.left - 16 - w, top }
+  const left = clamp(r.left + r.width / 2 - w / 2, 8, vw - w - 8)
+  return { left, top: r.top - CARD_H - 16 >= 8 ? r.top - CARD_H - 16 : Math.min(r.bottom + 16, vh - CARD_H - 8) }
 }
 
 export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () => void }) {
@@ -3522,10 +3555,18 @@ export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () 
     el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
     setRect(el ? el.getBoundingClientRect() : null)
   }, [step])
+  // Remember what had focus before the guide opened (usually the Guide button), and give it back on close.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null)
+  useEffect(() => () => opener?.focus?.(), [opener])
   useEffect(() => { cardRef.current?.focus() }, [i])
 
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Escape') onClose()
+    if (e.key === 'Escape') {
+      // The guide is on top: Esc closes only the guide, not a drawer underneath.
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
     else if (e.key === 'ArrowRight' && !last) setI(i + 1)
     else if (e.key === 'ArrowLeft' && i > 0) setI(i - 1)
     else if (e.key === 'Tab') {
@@ -3562,7 +3603,7 @@ export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () 
 - [ ] **Step 4: Run them to see them pass**
 
 Run: `npx vitest run src/components/shell`
-Expected: `Tests  5 passed (5)`
+Expected: `Tests  7 passed (7)`
 
 - [ ] **Step 5: Replace `src/App.tsx`** (Checkpoint 2 version: Area and Layers boxes, bottom strip, guide)
 
@@ -3670,22 +3711,38 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const openId = s.view === 'about' ? 'about' : panel
   const byId = (id: string | null) => [...panels, about].find((p) => p.id === id) ?? null
 
+  // On phones a drawer and the expanded strip would cover each other, so only one of them is open at a time.
+  const narrow = () => window.matchMedia('(max-width: 760px)').matches
   const closePanel = useCallback(() => {
-    if (s.view === 'about') { dispatch({ type: 'setView', view: 'explore' }); return }
+    if (s.view === 'about') {
+      dispatch({ type: 'setView', view: 'explore' })
+      document.querySelector<HTMLElement>('[data-tour="about"]')?.focus()
+      return
+    }
     const id = panel
     setPanel(null)
     if (id) document.querySelector<HTMLElement>(`[data-tour="box-${id}"]`)?.focus()
   }, [panel, s.view])
-  const togglePanel = (id: string) => {
+  const openPanel = (id: string, toggle = false) => {
     if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
     const p = byId(id)
     if (p) setShown((sh) => ({ ...sh, [p.side]: id }))
-    setPanel((cur) => (cur === id ? null : id))
+    setPanel((cur) => (toggle && cur === id ? null : id))
+    if (narrow()) setMore(false)
   }
+  const togglePanel = (id: string) => openPanel(id, true)
   const toggleAbout = () => {
     setPanel(null)
     setShown((sh) => ({ ...sh, right: 'about' }))
+    if (narrow()) setMore(false)
     dispatch({ type: 'setView', view: s.view === 'about' ? 'explore' : 'about' })
+  }
+  const toggleMore = () => {
+    if (!more && narrow()) {
+      setPanel(null)
+      if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
+    }
+    setMore((x) => !x)
   }
 
   const guideSteps: GuideStep[] = [
@@ -3707,16 +3764,17 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
     <div className={m.mock ? 'app has-banner' : 'app'}>
       <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
-      <TopBar selection={selection} onSelectionClick={() => togglePanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
+      <TopBar selection={selection} onSelectionClick={() => openPanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
       <main id="main" tabIndex={-1}>
         <div className="rails">
           <FeatureRail side="left" label="Choose what to show" boxes={panels.filter((p) => p.side === 'left')} open={panel} onToggle={togglePanel} />
           <FeatureRail side="right" label="Analysis" boxes={panels.filter((p) => p.side === 'right')} open={panel} onToggle={togglePanel} />
         </div>
+        {/* Both drawers are always in the page, so even the first opening slides in. */}
         {(['left', 'right'] as const).map((side) => {
           const p = byId(shown[side])
-          return p && (
-            <Drawer key={side} open={openId === p.id} side={side} wide={p.wide} title={p.title} onClose={closePanel}>{p.body()}</Drawer>
+          return (
+            <Drawer key={side} open={!!p && openId === p.id} side={side} wide={p?.wide} title={p?.title ?? ''} onClose={closePanel}>{p?.body()}</Drawer>
           )
         })}
         <div className="map-full">
@@ -3728,7 +3786,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
             }} />
         </div>
       </main>
-      <BottomStrip expanded={more} onToggle={() => setMore((x) => !x)} headline={headline}
+      <BottomStrip expanded={more} onToggle={toggleMore} headline={headline}
         legend={mapScale
           ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
           : <span className="small muted">Choose an area to colour the globe.</span>}
@@ -3745,7 +3803,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 - [ ] **Step 6: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: no tsc output; `Tests  55 passed (55)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
+Expected: no tsc output; `Tests  57 passed (57)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
 
 - [ ] **Step 7: Run it and check by hand**
 
@@ -3757,7 +3815,8 @@ Run: `npm run dev` and open the printed URL (keep the tab in front; background t
 - [ ] With the Area drawer open, draw on the visible globe: Circle (drag), Rectangle (drag), Polygon (click corners, then the first point), Freehand (click, move around, click). Each sets "Drawn …" in the pill.
 - [ ] Zoom right out and draw a huge circle: a red message explains the size limit and the area doesn't change.
 - [ ] "Or type coordinates": West `5`, East `1` explains the 180° line; a valid box works; Point + radius works; a box over South America makes the strip say "No data is loaded for this area yet".
-- [ ] Esc closes the drawer, which slides back out the way it came, and focus returns to the Area box. Clicking another box while a drawer is closing turns it around smoothly.
+- [ ] Esc closes the drawer, which slides back out the way it came, and focus returns to the Area box. Clicking another box while a drawer is closing turns it around smoothly. The first opening also slides.
+- [ ] Open the guide while a drawer is open and press Esc: only the guide closes, and focus returns to the Guide button. Closing About returns focus to the About button.
 - [ ] Layers box: night imagery and the borders/labels switch work.
 - [ ] About (round i button) opens on the right and closes.
 - [ ] More info expands the strip with the area summary.
@@ -4266,22 +4325,38 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const openId = s.view === 'about' ? 'about' : panel
   const byId = (id: string | null) => [...panels, about].find((p) => p.id === id) ?? null
 
+  // On phones a drawer and the expanded strip would cover each other, so only one of them is open at a time.
+  const narrow = () => window.matchMedia('(max-width: 760px)').matches
   const closePanel = useCallback(() => {
-    if (s.view === 'about') { dispatch({ type: 'setView', view: 'explore' }); return }
+    if (s.view === 'about') {
+      dispatch({ type: 'setView', view: 'explore' })
+      document.querySelector<HTMLElement>('[data-tour="about"]')?.focus()
+      return
+    }
     const id = panel
     setPanel(null)
     if (id) document.querySelector<HTMLElement>(`[data-tour="box-${id}"]`)?.focus()
   }, [panel, s.view])
-  const togglePanel = (id: string) => {
+  const openPanel = (id: string, toggle = false) => {
     if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
     const p = byId(id)
     if (p) setShown((sh) => ({ ...sh, [p.side]: id }))
-    setPanel((cur) => (cur === id ? null : id))
+    setPanel((cur) => (toggle && cur === id ? null : id))
+    if (narrow()) setMore(false)
   }
+  const togglePanel = (id: string) => openPanel(id, true)
   const toggleAbout = () => {
     setPanel(null)
     setShown((sh) => ({ ...sh, right: 'about' }))
+    if (narrow()) setMore(false)
     dispatch({ type: 'setView', view: s.view === 'about' ? 'explore' : 'about' })
+  }
+  const toggleMore = () => {
+    if (!more && narrow()) {
+      setPanel(null)
+      if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
+    }
+    setMore((x) => !x)
   }
 
   const guideSteps: GuideStep[] = [
@@ -4303,16 +4378,17 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
     <div className={m.mock ? 'app has-banner' : 'app'}>
       <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
-      <TopBar selection={selection} onSelectionClick={() => togglePanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
+      <TopBar selection={selection} onSelectionClick={() => openPanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
       <main id="main" tabIndex={-1}>
         <div className="rails">
           <FeatureRail side="left" label="Choose what to show" boxes={panels.filter((p) => p.side === 'left')} open={panel} onToggle={togglePanel} />
           <FeatureRail side="right" label="Analysis" boxes={panels.filter((p) => p.side === 'right')} open={panel} onToggle={togglePanel} />
         </div>
+        {/* Both drawers are always in the page, so even the first opening slides in. */}
         {(['left', 'right'] as const).map((side) => {
           const p = byId(shown[side])
-          return p && (
-            <Drawer key={side} open={openId === p.id} side={side} wide={p.wide} title={p.title} onClose={closePanel}>{p.body()}</Drawer>
+          return (
+            <Drawer key={side} open={!!p && openId === p.id} side={side} wide={p?.wide} title={p?.title ?? ''} onClose={closePanel}>{p?.body()}</Drawer>
           )
         })}
         <div className="map-full">
@@ -4324,7 +4400,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
             }} />
         </div>
       </main>
-      <BottomStrip expanded={more} onToggle={() => setMore((x) => !x)} headline={headline}
+      <BottomStrip expanded={more} onToggle={toggleMore} headline={headline}
         legend={mapScale
           ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
           : <span className="small muted">Choose an area to colour the globe.</span>}
@@ -4356,7 +4432,7 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck and test**
 
 Run: `npx tsc -b && npm test`
-Expected: `Tests  61 passed (61)`
+Expected: `Tests  63 passed (63)`
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] The guide now has 7 steps (Dates and Calendar added).
@@ -5227,22 +5303,38 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
   const openId = s.view === 'about' ? 'about' : panel
   const byId = (id: string | null) => [...panels, about].find((p) => p.id === id) ?? null
 
+  // On phones a drawer and the expanded strip would cover each other, so only one of them is open at a time.
+  const narrow = () => window.matchMedia('(max-width: 760px)').matches
   const closePanel = useCallback(() => {
-    if (s.view === 'about') { dispatch({ type: 'setView', view: 'explore' }); return }
+    if (s.view === 'about') {
+      dispatch({ type: 'setView', view: 'explore' })
+      document.querySelector<HTMLElement>('[data-tour="about"]')?.focus()
+      return
+    }
     const id = panel
     setPanel(null)
     if (id) document.querySelector<HTMLElement>(`[data-tour="box-${id}"]`)?.focus()
   }, [panel, s.view])
-  const togglePanel = (id: string) => {
+  const openPanel = (id: string, toggle = false) => {
     if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
     const p = byId(id)
     if (p) setShown((sh) => ({ ...sh, [p.side]: id }))
-    setPanel((cur) => (cur === id ? null : id))
+    setPanel((cur) => (toggle && cur === id ? null : id))
+    if (narrow()) setMore(false)
   }
+  const togglePanel = (id: string) => openPanel(id, true)
   const toggleAbout = () => {
     setPanel(null)
     setShown((sh) => ({ ...sh, right: 'about' }))
+    if (narrow()) setMore(false)
     dispatch({ type: 'setView', view: s.view === 'about' ? 'explore' : 'about' })
+  }
+  const toggleMore = () => {
+    if (!more && narrow()) {
+      setPanel(null)
+      if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
+    }
+    setMore((x) => !x)
   }
 
   const guideSteps: GuideStep[] = [
@@ -5264,16 +5356,17 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     <div className={m.mock ? 'app has-banner' : 'app'}>
       <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
-      <TopBar selection={selection} onSelectionClick={() => togglePanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
+      <TopBar selection={selection} onSelectionClick={() => openPanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
       <main id="main" tabIndex={-1}>
         <div className="rails">
           <FeatureRail side="left" label="Choose what to show" boxes={panels.filter((p) => p.side === 'left')} open={panel} onToggle={togglePanel} />
           <FeatureRail side="right" label="Analysis" boxes={panels.filter((p) => p.side === 'right')} open={panel} onToggle={togglePanel} />
         </div>
+        {/* Both drawers are always in the page, so even the first opening slides in. */}
         {(['left', 'right'] as const).map((side) => {
           const p = byId(shown[side])
-          return p && (
-            <Drawer key={side} open={openId === p.id} side={side} wide={p.wide} title={p.title} onClose={closePanel}>{p.body()}</Drawer>
+          return (
+            <Drawer key={side} open={!!p && openId === p.id} side={side} wide={p?.wide} title={p?.title ?? ''} onClose={closePanel}>{p?.body()}</Drawer>
           )
         })}
         <div className="map-full">
@@ -5285,7 +5378,7 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
             }} />
         </div>
       </main>
-      <BottomStrip expanded={more} onToggle={() => setMore((x) => !x)} headline={headline}
+      <BottomStrip expanded={more} onToggle={toggleMore} headline={headline}
         legend={mapScale
           ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
           : <span className="small muted">Choose an area to colour the globe.</span>}
@@ -5319,7 +5412,7 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: `Tests  66 passed (66)`; oxlint shows warnings only.
+Expected: `Tests  68 passed (68)`; oxlint shows warnings only.
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] More info shows the summary cards: "October 2026 (Near real-time: provisional)", a verdict with a coloured dot and its percentile, the anomaly against the average and the median, year to date, rank, and a caption naming 2003 to 2025 and the sensors.
@@ -5646,7 +5739,7 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 - [ ] Open the URL in a private window and on a phone.
 
 #### ✅ CHECKPOINT 5: Ready to publish. Stop and review with Aziz
-`npm test` (66), `npm run test:e2e` (19), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
+`npm test` (68), `npm run test:e2e` (19), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
 
 ---
 
