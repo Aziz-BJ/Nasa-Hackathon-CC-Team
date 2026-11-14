@@ -35,8 +35,7 @@ export interface AreaPanelProps {
 export function AreaPanel({ presets, area, tool, onTool, onArea, error }: AreaPanelProps) {
   const presetValue = area?.source === 'preset' ? area.presetId ?? '' : ''
   return (
-    <fieldset>
-      <legend>1. Choose an area</legend>
+    <div>
       <label>
         Preset region
         <select value={presetValue} onChange={(e) => {
@@ -61,6 +60,6 @@ export function AreaPanel({ presets, area, tool, onTool, onArea, error }: AreaPa
         <summary>Or type coordinates</summary>
         <CoordinateForm onArea={onArea} />
       </details>
-    </fieldset>
+    </div>
   )
 }

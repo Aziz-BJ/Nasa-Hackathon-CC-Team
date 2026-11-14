@@ -12,8 +12,8 @@ export const PALETTES: Record<PaletteId, { label: string; interpolate: (t: numbe
   cividis: { label: 'Colour-vision optimised (cividis)', interpolate: interpolateCividis },
 }
 
-export const ZERO_FILL = '#16285a'
-export const NO_DATA_FILL = '#5c6680'
+export const ZERO_FILL = '#2c2c34'
+export const NO_DATA_FILL = '#4a4a52'
 
 export interface CountScale {
   /** Lower bound of each bin. Bin i covers [edges[i], edges[i+1]) and the last bin goes up to max. */

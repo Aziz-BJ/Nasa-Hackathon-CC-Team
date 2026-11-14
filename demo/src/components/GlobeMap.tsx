@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { useEffect, useRef, useState } from 'react'
-import { Map as MLMap, NavigationControl, setWorkerUrl, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+import { Map as MLMap, NavigationControl, setWorkerUrl, type ExpressionSpecification, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { TerraDraw, TerraDrawCircleMode, TerraDrawFreehandMode, TerraDrawPolygonMode, TerraDrawRectangleMode } from 'terra-draw'
@@ -18,10 +18,20 @@ const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
 const gibs = (layer: string, level: number, ext: string, date = '') =>
   `${GIBS}/${layer}/default/${date ? date + '/' : ''}GoogleMapsCompatible_Level${level}/{z}/{y}/{x}.${ext}`
 
+// Borders and place names come from OpenFreeMap (free, no key; OpenStreetMap data). Kept light on purpose:
+// country borders, country names, capitals, and other big cities only when zoomed in.
+const OSM_NAME: ExpressionSpecification = ['coalesce', ['get', 'name:en'], ['get', 'name']]
+const LABEL_PAINT = { 'text-color': '#ffffff', 'text-halo-color': 'rgba(7,23,63,0.85)', 'text-halo-width': 1.4 }
+export const LABEL_LAYERS = ['borders', 'country-labels', 'city-labels']
+
 export const MAP_STYLE: StyleSpecification = {
   version: 8,
   projection: { type: 'globe' },
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  // A soft atmosphere around the globe, fading out as you zoom in to a flat map.
+  sky: { 'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0] },
   sources: {
+    osm: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
     day: { type: 'raster', tileSize: 256, maxzoom: 8, tiles: [gibs('BlueMarble_ShadedRelief_Bathymetry', 8, 'jpeg')],
       attribution: 'Imagery: NASA GIBS (Blue Marble)' },
     night: { type: 'raster', tileSize: 256, maxzoom: 8, tiles: [gibs('VIIRS_Black_Marble', 8, 'png', '2016-01-01')],
@@ -30,9 +40,26 @@ export const MAP_STYLE: StyleSpecification = {
     // black or as HTTP 500, and MapLibre's globe draws each failed tile as a black square over everything.
   },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#07173F' } },
+    { id: 'background', type: 'background', paint: { 'background-color': '#000000' } },
     { id: 'day', type: 'raster', source: 'day' },
     { id: 'night', type: 'raster', source: 'night', layout: { visibility: 'none' } },
+    {
+      id: 'borders', type: 'line', source: 'osm', 'source-layer': 'boundary',
+      filter: ['all', ['==', ['get', 'admin_level'], 2], ['!=', ['get', 'maritime'], 1]],
+      paint: { 'line-color': '#ffffff', 'line-opacity': 0.55, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.5, 6, 1.4] },
+    },
+    {
+      id: 'country-labels', type: 'symbol', source: 'osm', 'source-layer': 'place',
+      filter: ['==', ['get', 'class'], 'country'],
+      layout: { 'text-field': OSM_NAME, 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 1, 10, 6, 15], 'text-max-width': 8 },
+      paint: LABEL_PAINT,
+    },
+    {
+      id: 'city-labels', type: 'symbol', source: 'osm', 'source-layer': 'place', minzoom: 3,
+      filter: ['all', ['==', ['get', 'class'], 'city'], ['any', ['==', ['get', 'capital'], 2], ['>=', ['zoom'], 5]]],
+      layout: { 'text-field': OSM_NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
+      paint: LABEL_PAINT,
+    },
   ],
 }
 
@@ -46,13 +73,13 @@ export interface GlobeMapProps {
   overview: GeoJSON.FeatureCollection
   tool: DrawTool
   basemap: Basemap
-  /** Reserved for a borders/labels overlay (see plan section 2.1); not drawn yet. */
+  /** Country borders and place names. */
   labels: boolean
   /** Called once when the user finishes drawing a shape. */
   onDrawn: (area: Area) => void
 }
 
-export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: GlobeMapProps) {
+export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn }: GlobeMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
@@ -67,21 +94,24 @@ export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: Glob
   useEffect(() => {
     let map: MLMap
     try {
-      map = new MLMap({ container: container.current!, style: structuredClone(MAP_STYLE), center: [10, 15], zoom: 1.4, attributionControl: { compact: true } })
+      // Credits are shown in the bottom strip (always visible), so MapLibre's own attribution box is off.
+      map = new MLMap({ container: container.current!, style: structuredClone(MAP_STYLE), center: [10, 15], zoom: 1.4, attributionControl: false })
     } catch (e) {
       setFailed(e instanceof Error ? e.message : String(e))
       return
     }
     mapRef.current = map
-    map.addControl(new NavigationControl({ visualizePitch: false }), 'top-right')
+    map.addControl(new NavigationControl({ visualizePitch: false }), 'bottom-right')
     map.on('load', () => {
       map.addSource('overview', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } })
+      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } }, 'borders')
       map.addSource('cells', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.85 } })
-      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#07173F', 'line-width': 0.5 } })
+      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.8 } }, 'borders')
+      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#000000', 'line-opacity': 0.35, 'line-width': 0.5 } }, 'borders')
       map.addSource('area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'area', type: 'line', source: 'area', paint: { 'line-color': '#EAFE07', 'line-width': 2.5 } })
+      // White outline on a dark casing: readable over imagery and over every ramp colour.
+      map.addLayer({ id: 'area-casing', type: 'line', source: 'area', paint: { 'line-color': '#000000', 'line-opacity': 0.55, 'line-width': 6 } })
+      map.addLayer({ id: 'area', type: 'line', source: 'area', paint: { 'line-color': '#ffffff', 'line-width': 2.25 } })
 
       const draw = new TerraDraw({
         adapter: new TerraDrawMapLibreGLAdapter({ map }),
@@ -134,7 +164,10 @@ export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: Glob
     ;(map.getSource('area') as GeoJSONSource | undefined)?.setData(areaToFeatures(area?.geometry ?? null))
     if (area) {
       const [w, s, e, n] = area.bbox
-      map.fitBounds([[w, s], [e, n]], { padding: 48, maxZoom: 6, duration: 1200 })
+      // Keep the area clear of the floating controls (top bar, side boxes, bottom strip).
+      const phone = map.getContainer().clientWidth < 760
+      const padding = phone ? { top: 70, bottom: 250, left: 20, right: 20 } : { top: 90, bottom: 150, left: 110, right: 110 }
+      map.fitBounds([[w, s], [e, n]], { padding, maxZoom: 6, duration: 1200 })
     }
   }, [ready, area])
 
@@ -143,7 +176,8 @@ export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: Glob
     if (!ready || !map) return
     map.setLayoutProperty('day', 'visibility', basemap === 'day' ? 'visible' : 'none')
     map.setLayoutProperty('night', 'visibility', basemap === 'night' ? 'visible' : 'none')
-  }, [ready, basemap])
+    for (const id of LABEL_LAYERS) map.setLayoutProperty(id, 'visibility', labels ? 'visible' : 'none')
+  }, [ready, basemap, labels])
 
   if (failed) {
     return (

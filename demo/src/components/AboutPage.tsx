@@ -5,7 +5,7 @@ import type { Manifest } from '../lib/types'
 export function AboutPage({ manifest }: { manifest: Manifest }) {
   const m = manifest
   return (
-    <main className="about" id="main">
+    <div className="about">
       <h2>What this shows</h2>
       <p>
         A monthly calendar of satellite fire detections ("hotspots") for any area you choose, from the early 2000s to now,
@@ -58,6 +58,6 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
 
       <h2>Use of AI</h2>
       <p>Parts of this app's code were generated with AI assistance (Claude) and reviewed by the team. The harmonization method is the team's own work. See docs/AI_USE.md in the repository.</p>
-    </main>
+    </div>
   )
 }
