@@ -1,13 +1,19 @@
 {
-  "name": "demo",
+  "name": "hotspot-calendar",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run check-data && tsc -b && vite build && node scripts/check-data.mjs post",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "mock-data": "node scripts/make-mock-data.ts",
+    "predev": "npm run mock-data",
+    "check-data": "node scripts/check-data.mjs pre",
+    "build:demo": "npm run mock-data && ALLOW_MOCK=1 npm run build",
+    "test": "npm run mock-data && vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@fontsource/fira-sans": "5.3.0",
