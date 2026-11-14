@@ -25,7 +25,7 @@
 - Commits made by Claude end with the `Co-Authored-By` line from the session instructions.
 
 **What was already proven on 14 Nov 2026 (throwaway spike).** Every code block below was typechecked with `tsc -b` (strict) and run:
-- 68 unit tests and 19 Playwright tests (desktop and phone, including axe accessibility and the guide) pass.
+- 71 unit tests and 19 Playwright tests (desktop and phone, including axe accessibility and the guide) pass.
 - MapLibre 6 globe + NASA GIBS Blue Marble tiles + Terra Draw circle drawing work in dev, in the production build, and in headless Chromium.
 - Pitfalls already solved, so don't "fix" them back:
   1. `maplibre-gl` 6 has **no default export**: use `import { Map } from 'maplibre-gl'`.
@@ -48,6 +48,13 @@
      - The skip link targets `#main`, which exists on both pages.
   10. Redesigned after Aziz reviewed Checkpoint 2 (the first layout looked like a slide deck): map-first layout with Apple-style dark glass (sections 1 and 2.6). Drawers stay mounted and are `inert` while closed, so closed panels are invisible to tests and screen readers. The scrolling More info area is focusable so keyboard users can scroll it.
   11. Found by the redesign verifier and fixed: focus returns to the About and Guide buttons when those close; Esc in the guide doesn't also close a drawer; the top pill always opens Area; both drawers are always in the page so the first opening slides; an empty box group isn't drawn; on phones the guide card sits above the box it points at, the boxes follow the strip's real height (`--strip-h` set from the strip), and a drawer and More info don't open together.
+  12. Found by the Checkpoint 3 verifier (which recomputed every calendar number from the tiles: all correct) and fixed:
+      - Bins compare the value as printed (`displayRound`), so a printed number is always inside its printed range.
+      - The median row joins the calendar bins (`calendarMedians`), so the legend covers it.
+      - Month status follows the chosen sensor (`monthStatus(m, ym, key)`): VIIRS months before launch read "No sensor operating".
+      - The detail line prints the true ratio to the median; summary cards show a plain difference when the reference is below `MIN_DENOMINATOR`.
+      - A month to date gets no verdict, rank or year-to-date comparison.
+      - Year totals say "(n of 12 months)" for partly chosen years; months outside the range get a neutral fill.
 - **Background browser tabs don't render WebGL.** If the globe looks blank while you test in a hidden pane or a background tab, bring the tab to the front before debugging.
 
 **TO CONFIRM (asks for the team, none of them block Checkpoints 1 to 5):**
@@ -166,10 +173,10 @@ Each checkpoint ends with a stop: run the checks, show Aziz the result, commit a
 
 | # | Name | Tasks | Aziz sees | Proof |
 | --- | --- | --- | --- | --- |
-| 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 42 pass; `npm run build` exits 1 |
-| 2 | Map-first shell and area | 9–13 | Full-screen globe, boxes and drawers, bottom strip, guide; choose an area 4 ways | 57 pass; manual check list |
-| 3 | Calendar and colour ramps | 14–16 | Dates and Calendar boxes, colours that rescale | 63 pass; manual check list |
-| 4 | Indices, charts, download | 17–22 | Summary cards, Trends, Sensors, Reported, Download and share | 68 pass; manual check list |
+| 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 45 pass; `npm run build` exits 1 |
+| 2 | Map-first shell and area | 9–13 | Full-screen globe, boxes and drawers, bottom strip, guide; choose an area 4 ways | 60 pass; manual check list |
+| 3 | Calendar and colour ramps | 14–16 | Dates and Calendar boxes, colours that rescale | 66 pass; manual check list |
+| 4 | Indices, charts, download | 17–22 | Summary cards, Trends, Sensors, Reported, Download and share | 71 pass; manual check list |
 | 5 | Ready to publish | 23–26 | e2e + axe green on desktop and phone, docs, QA sign-off | `npm run test:e2e` 19 pass |
 | 6 | Real data (after the pipeline delivers) | 27 | Same app on FIRMS data | build passes, no banner |
 
@@ -751,7 +758,7 @@ git commit -m "demo: settings, tiled data contract types and validated loader"
 
 ### Task 4: Areas, data status and aggregation
 
-**Files:** Create `src/lib/area.ts`, `src/lib/area.test.ts`, `src/lib/status.ts`, `src/lib/aggregate.ts`, `src/lib/aggregate.test.ts`
+**Files:** Create `src/lib/area.ts`, `src/lib/area.test.ts`, `src/lib/status.ts`, `src/lib/status.test.ts`, `src/lib/aggregate.ts`, `src/lib/aggregate.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -871,10 +878,34 @@ describe('aggregate', () => {
 })
 ```
 
+`src/lib/status.test.ts` (a raw sensor has no data before it launched)
+```ts
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+import { describe, expect, it } from 'vitest'
+import { monthStatus } from './status'
+import type { Manifest } from './types'
+
+const m = {
+  last_month: '2026-11', month_to_date: true, nrt_from: '2026-07', harmonized_coverage: ['2000-11', '2026-11'],
+  sensors: [{ key: 'viirs_snpp', first_month: '2012-01', last_month: '2026-11' }],
+} as unknown as Manifest
+
+describe('monthStatus', () => {
+  it('follows the chosen series and marks provisional months', () => {
+    expect(monthStatus(m, '2005-06')).toBe('standard')
+    expect(monthStatus(m, '2005-06', 'viirs_snpp')).toBe('no_sensor')
+    expect(monthStatus(m, '2005-06', 'viirs_noaa20')).toBe('no_sensor') // not in this manifest
+    expect(monthStatus(m, '2026-08', 'viirs_snpp')).toBe('nrt')
+    expect(monthStatus(m, '2026-11')).toBe('partial')
+    expect(monthStatus(m, '2000-10')).toBe('no_sensor')
+  })
+})
+```
+
 - [ ] **Step 2: Run them to see them fail**
 
-Run: `npx vitest run src/lib/area.test.ts src/lib/aggregate.test.ts`
-Expected: FAIL, unresolved imports `./area`, `./aggregate`.
+Run: `npx vitest run src/lib/area.test.ts src/lib/aggregate.test.ts src/lib/status.test.ts`
+Expected: FAIL, unresolved imports `./area`, `./aggregate`, `./status`.
 
 - [ ] **Step 3: Implement**
 
@@ -980,8 +1011,10 @@ export function inSpan(ym: YearMonth, [first, last]: [YearMonth, YearMonth]): bo
   return ym >= first && ym <= last
 }
 
-export function monthStatus(m: Manifest, ym: YearMonth): MonthStatus {
-  if (!inSpan(ym, m.harmonized_coverage) || ym > m.last_month) return 'no_sensor'
+/** Status of one month for one series: a raw sensor has no data before it launched or after it ended. */
+export function monthStatus(m: Manifest, ym: YearMonth, key: SeriesKey = 'harmonized'): MonthStatus {
+  const span = seriesSpan(m, key)
+  if (!span || !inSpan(ym, span) || ym > m.last_month) return 'no_sensor'
   if (m.month_to_date && ym === m.last_month) return 'partial'
   if (ym >= m.nrt_from) return 'nrt'
   return 'standard'
@@ -1140,13 +1173,13 @@ export function coverageOf(m: Manifest, area: Area): 'none' | 'partial' | 'full'
 
 - [ ] **Step 4: Run them to see them pass**
 
-Run: `npx vitest run src/lib/area.test.ts src/lib/aggregate.test.ts`
-Expected: `Tests  12 passed (12)`
+Run: `npx vitest run src/lib/area.test.ts src/lib/aggregate.test.ts src/lib/status.test.ts`
+Expected: `Tests  13 passed (13)`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/lib/area.ts src/lib/area.test.ts src/lib/status.ts src/lib/aggregate.ts src/lib/aggregate.test.ts
+git add src/lib/area.ts src/lib/area.test.ts src/lib/status.ts src/lib/status.test.ts src/lib/aggregate.ts src/lib/aggregate.test.ts
 git commit -m "demo: area validation, data status and per-area aggregation"
 ```
 
@@ -1161,7 +1194,7 @@ git commit -m "demo: area validation, data status and per-area aggregation"
 import { describe, expect, it } from 'vitest'
 import { monthRange } from './months'
 import {
-  monthlyAnomalies, percentileOf, quantile, rankOf, relativeAnomaly,
+  calendarMedians, monthlyAnomalies, percentileOf, quantile, rankOf, relativeAnomaly,
   sameMonthBaseline, summarizeMonth, verdictFor, yearToDate,
 } from './indices'
 
@@ -1215,6 +1248,12 @@ describe('indices', () => {
     const flat = m2.map(() => 10)
     expect(yearToDate(flat, m2, '2000-12', [2000, 2006])).toBeNull()
     expect(yearToDate(flat, m2, '2006-12', [2000, 2006])).toEqual({ current: 120, typical: 120, anomalyPct: 0, years: 5 })
+  })
+  it('gives the typical value of each calendar month', () => {
+    const med = calendarMedians(series, months, [2003, 2006])
+    expect(med[7]).toBe(25) // Augusts 10, 20, 30, 40
+    expect(med[0]).toBe(1)
+    expect(calendarMedians(series, months, [2010, 2012]).every((v) => v === null)).toBe(true)
   })
 })
 ```
@@ -1399,6 +1438,17 @@ export function yearToDate(series: Series, months: YearMonth[], focus: YearMonth
   return { current, typical, anomalyPct: relativeAnomaly(current, typical), years: base.length }
 }
 
+/** Median of each calendar month (Jan..Dec) over the baseline years: the calendar's "typical year" row. */
+export function calendarMedians(series: Series, months: YearMonth[], [y0, y1]: [number, number]): (number | null)[] {
+  const byMonth: number[][] = Array.from({ length: 12 }, () => [])
+  months.forEach((ym, i) => {
+    const { year, month } = parseYm(ym)
+    const v = series[i]
+    if (year >= y0 && year <= y1 && v !== null) byMonth[month - 1].push(v)
+  })
+  return byMonth.map((vals) => (vals.length ? quantile(vals.sort((a, b) => a - b), 0.5) : null))
+}
+
 export interface MonthlyAnomaly {
   month: YearMonth
   value: number
@@ -1428,7 +1478,7 @@ export function monthlyAnomalies(
 - [ ] **Step 4: Run it to see it pass**
 
 Run: `npx vitest run src/lib/indices.test.ts`
-Expected: `Tests  8 passed (8)`
+Expected: `Tests  9 passed (9)`
 
 - [ ] **Step 5: Commit**
 
@@ -1446,7 +1496,7 @@ git commit -m "demo: baseline stats, anomalies, percentile, rank, verdict, year 
 ```ts
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
-import { anomalyBin, anomalyColor, buildCountScale, NO_DATA_FILL, ZERO_FILL } from './colorScale'
+import { anomalyBin, anomalyColor, buildCountScale, displayRound, NO_DATA_FILL, ZERO_FILL } from './colorScale'
 
 describe('buildCountScale', () => {
   const values = [null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100]
@@ -1476,6 +1526,16 @@ describe('buildCountScale', () => {
     // A narrow range keeps its quantile bins: log bins would merge 10 and 19
     const narrow = buildCountScale([...Array(40).fill(10), 11, 12, 13, 14, 15, 16, 17, 18, 19], { method: 'quantile', bins: 7, palette: 'inferno' })
     expect(narrow.colorOf(10)).not.toBe(narrow.colorOf(19))
+  })
+  it('keeps every printed value inside its printed range', () => {
+    const values = [1.04, 9.96, 12, 17.599, 17.6, 18.2, 36.4, 52, 53.7, 120.4, 181.6, 182.4, 999.5]
+    const s = buildCountScale(values, { method: 'quantile', bins: 7, palette: 'inferno' })
+    expect(s.edges.every((e) => displayRound(e) === e)).toBe(true)
+    for (const v of values) {
+      const i = s.binOf(v)
+      expect(displayRound(v)).toBeGreaterThanOrEqual(s.edges[i])
+      if (i + 1 < s.edges.length) expect(displayRound(v)).toBeLessThan(s.edges[i + 1])
+    }
   })
   it('makes log bins with round numbers', () => {
     const s = buildCountScale([1, 1000], { method: 'log', bins: 3, palette: 'inferno' })
@@ -1533,6 +1593,14 @@ export interface CountScale {
   labels: string[]
 }
 
+/**
+ * The value as the app prints it: one decimal below 10, whole numbers from 10. Bin edges are rounded the same way
+ * and values are binned by this rounded value, so a printed number always sits inside its printed range.
+ */
+export function displayRound(v: number): number {
+  return Math.abs(v) < 10 ? Math.round(v * 10) / 10 : Math.round(v)
+}
+
 export function fmtCount(v: number): string {
   if (v === 0) return '0'
   if (Math.abs(v) < 10) return (Math.round(v * 10) / 10).toLocaleString('en-GB')
@@ -1550,14 +1618,14 @@ export function buildCountScale(
   opts: { method: RampMethod; bins: number; palette: PaletteId },
 ): CountScale {
   const pos = values.filter((v): v is number => v !== null && v > 0).sort((a, b) => a - b)
-  const min = pos[0] ?? 1
+  const min = displayRound(pos[0] ?? 1)
   const max = pos[pos.length - 1] ?? 1
   const make = (method: RampMethod) => {
     const t: number[] = []
     for (let k = 1; k < opts.bins; k++) {
       t.push(method === 'quantile' ? quantile(pos, k / opts.bins) : nice(min * (max / min) ** (k / opts.bins)))
     }
-    return [...new Set(t.map((x) => Math.round(x * 10) / 10))].filter((x) => x > min && x <= max)
+    return [...new Set(t.map(displayRound))].filter((x) => x > min && x <= max)
   }
   let thresholds: number[] = []
   if (pos.length > 1) {
@@ -1575,8 +1643,9 @@ export function buildCountScale(
   const n = edges.length
   const colors = edges.map((_, i) => interp(0.2 + 0.78 * (n === 1 ? 1 : i / (n - 1))))
   const binOf = (v: number) => {
+    const d = displayRound(v)
     let i = 0
-    while (i + 1 < n && v >= edges[i + 1]) i++
+    while (i + 1 < n && d >= edges[i + 1]) i++
     return i
   }
   const labels = edges.map((lo, i) => (i + 1 < n ? `${fmtCount(lo)} to <${fmtCount(edges[i + 1])}` : `${fmtCount(lo)} to ${fmtCount(max)}`))
@@ -1670,7 +1739,7 @@ export function areaToFeatures(geometry: GeoJSON.Polygon | null): GeoJSON.Featur
 - [ ] **Step 4: Run it to see it pass**
 
 Run: `npx vitest run src/lib/colorScale.test.ts`
-Expected: `Tests  6 passed (6)`
+Expected: `Tests  7 passed (7)`
 
 - [ ] **Step 5: Commit**
 
@@ -2066,7 +2135,7 @@ Expected: `Build stopped: dataset "_mock" is MOCK DATA. …` then `exit 1`
 - [ ] **Step 6: Run every engine test**
 
 Run: `npm test`
-Expected: `Tests  42 passed (42)`
+Expected: `Tests  45 passed (45)`
 
 - [ ] **Step 7: Commit**
 
@@ -2076,7 +2145,7 @@ git commit -m "demo: deterministic mock data generator and no-mock build guard"
 ```
 
 #### ✅ CHECKPOINT 1: Engine. Stop and review with Aziz
-- `npm test`: 42 pass. `npm run check-data`: exit 1 on mock data.
+- `npm test`: 45 pass. `npm run check-data`: exit 1 on mock data.
 - Open `public/data/_mock/manifest.json` together: is the tiled contract (section 2.3) acceptable to send to Andre and Pierre?
 - Review `src/config.ts` values (TO CONFIRM 3).
 - Add a row to `docs/AI_USE.md` (date, files, "engine generated with Claude from the plan").
@@ -2302,6 +2371,7 @@ table.calendar td.c.partial { box-shadow: inset 0 0 0 2px var(--yellow); }
 table.calendar td.c:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; z-index: 1; }
 table.calendar td.total { padding-left: 0.5rem; white-space: nowrap; color: var(--label-2); }
 table.calendar td.total .bar { display: inline-block; height: 0.5rem; border-radius: 3px; background: var(--accent); margin-right: 0.35rem; vertical-align: middle; }
+table.calendar td.total .bar.part { opacity: 0.45; }
 .cell-detail { min-height: 2.6rem; margin-top: 0.6rem; font-size: 0.875rem; }
 
 .figure svg { overflow: visible; }
@@ -3632,10 +3702,11 @@ import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
-import { buildCountScale } from './lib/colorScale'
+import { buildCountScale, fmtCount } from './lib/colorScale'
 import { summarizeMonth, VERDICT_LABELS } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm } from './lib/months'
+import { monthStatus } from './lib/status'
 import type { Manifest } from './lib/types'
 import { initialState, reducer, type AppState } from './state/appState'
 
@@ -3757,6 +3828,8 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const headline: ReactNode = !s.area ? 'Choose an area to begin.'
     : data.coverage === 'none' ? 'No data is loaded for this area yet.'
     : !focus || focus.value === null ? `${s.area.label}: loading…`
+    // A month that is not finished gets no verdict: its total is still growing.
+    : monthStatus(m, s.to) === 'partial' ? <><strong>{longLabelYm(s.to)}</strong> (month to date): {fmtCount(focus.value)} hotspots so far · not comparable until the month ends</>
     : <><strong>{longLabelYm(s.to)}</strong>: {Math.round(focus.value).toLocaleString('en-GB')} hotspots
         {focus.verdict && focus.percentile !== null && <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile)</>}</>
 
@@ -3803,7 +3876,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 - [ ] **Step 6: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: no tsc output; `Tests  57 passed (57)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
+Expected: no tsc output; `Tests  60 passed (60)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
 
 - [ ] **Step 7: Run it and check by hand**
 
@@ -3963,6 +4036,7 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { buildCountScale } from '../lib/colorScale'
+import { calendarMedians } from '../lib/indices'
 import { monthRange } from '../lib/months'
 import { BurningCalendar } from './BurningCalendar'
 
@@ -3972,7 +4046,7 @@ const scale = buildCountScale(values, { method: 'quantile', bins: 4, palette: 'i
 
 function setup(onFocusMonth = vi.fn()) {
   render(
-    <BurningCalendar months={months} values={values} from="2011-01" to="2012-12" scale={scale}
+    <BurningCalendar months={months} values={values} from="2011-01" to="2012-12" scale={scale} medians={calendarMedians(values, months, [2011, 2012])}
       statusOf={(ym) => (ym === '2012-12' ? 'partial' : 'standard')} baselineYears={[2011, 2012]}
       seriesLabel="harmonized" legendId="lg" onFocusMonth={onFocusMonth} />,
   )
@@ -3987,6 +4061,7 @@ describe('BurningCalendar', () => {
     expect(screen.getByLabelText(/Jan 2011: no data/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Jun 2011: 0 hotspots/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Dec 2012: 10 hotspots.*Month to date/)).toBeInTheDocument()
+    expect(screen.getByText(/10 of 12 months/)).toBeInTheDocument() // 2011 has no data for Jan and Feb
   })
   it('moves focus with the arrow keys', () => {
     const onFocusMonth = setup()
@@ -4026,7 +4101,6 @@ Expected: FAIL, `Failed to resolve import "./BurningCalendar"`.
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { fmtCount, type CountScale } from '../lib/colorScale'
 import { textClass } from '../lib/contrast'
-import { quantile } from '../lib/indices'
 import { formatYm, labelYm, MONTH_SHORT, parseYm, type YearMonth } from '../lib/months'
 import { STATUS_LABELS, type MonthStatus } from '../lib/status'
 
@@ -4036,12 +4110,17 @@ export interface BurningCalendarProps {
   from: YearMonth
   to: YearMonth
   scale: CountScale
+  /** Typical value of each calendar month (Jan..Dec) over the baseline years. Include these in the scale. */
+  medians: (number | null)[]
   statusOf: (ym: YearMonth) => MonthStatus
   baselineYears: [number, number]
   seriesLabel: string
   legendId: string
   onFocusMonth?: (ym: YearMonth) => void
 }
+
+/** Months outside the chosen range are shown dimmed and neutral: they are not part of the colour bins. */
+const OUTSIDE_FILL = '#3a3a40'
 
 function toHex(color: string): string {
   const m = /^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/.exec(color)
@@ -4063,24 +4142,18 @@ export function BurningCalendar(p: BurningCalendarProps) {
   }
   const inRange = (ym: YearMonth) => ym >= p.from && ym <= p.to
 
+  // Totals over the chosen months only. A year with fewer counted months says so, so it isn't read as a full year.
   const yearTotals = years.map((y) => {
-    let t: number | null = null
+    let total: number | null = null
+    let counted = 0
     for (let m = 1; m <= 12; m++) {
       const ym = formatYm(y, m)
       const v = valueOf(ym)
-      if (inRange(ym) && v !== null) t = (t ?? 0) + v
+      if (inRange(ym) && v !== null) { total = (total ?? 0) + v; counted++ }
     }
-    return t
+    return { total, counted }
   })
-  const maxTotal = Math.max(1, ...yearTotals.map((t) => t ?? 0))
-  const medians = Array.from({ length: 12 }, (_, i) => {
-    const vals = p.months
-      .map((ym, j) => ({ ...parseYm(ym), v: p.values[j] }))
-      .filter((x) => x.month === i + 1 && x.year >= p.baselineYears[0] && x.year <= p.baselineYears[1] && x.v !== null)
-      .map((x) => x.v as number)
-      .sort((a, b) => a - b)
-    return vals.length ? quantile(vals, 0.5) : null
-  })
+  const maxTotal = Math.max(1, ...yearTotals.map((t) => t.total ?? 0))
 
   function describe(ym: YearMonth): string {
     const v = valueOf(ym)
@@ -4132,7 +4205,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
                   const ym = formatYm(y, mi + 1)
                   const v = valueOf(ym)
                   const status = p.statusOf(ym)
-                  const fill = p.scale.colorOf(v)
+                  const fill = inRange(ym) ? p.scale.colorOf(v) : OUTSIDE_FILL
                   const cls = ['c',
                     v === null ? 'nodata' : v === 0 ? 'zero' : '',
                     inRange(ym) ? '' : 'outside',
@@ -4149,8 +4222,9 @@ export function BurningCalendar(p: BurningCalendarProps) {
                   )
                 })}
                 <td className="total">
-                  <span className="bar" style={{ width: `${((yearTotals[yi] ?? 0) / maxTotal) * 4}rem` }} aria-hidden />
-                  {yearTotals[yi] === null ? '' : fmtCount(yearTotals[yi] as number)}
+                  <span className={`bar${yearTotals[yi].counted < 12 ? ' part' : ''}`} style={{ width: `${((yearTotals[yi].total ?? 0) / maxTotal) * 4}rem` }} aria-hidden />
+                  {yearTotals[yi].total === null ? '' : fmtCount(yearTotals[yi].total as number)}
+                  {yearTotals[yi].total !== null && yearTotals[yi].counted < 12 && <span className="muted"> ({yearTotals[yi].counted} of 12 months)</span>}
                 </td>
               </tr>
             ))}
@@ -4158,7 +4232,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
           <tfoot>
             <tr>
               <th scope="row">Median {p.baselineYears[0]}–{p.baselineYears[1]}</th>
-              {medians.map((v, i) => {
+              {p.medians.map((v, i) => {
                 const fill = p.scale.colorOf(v)
                 return (
                   <td key={i} className={`c ${v === null ? 'nodata' : textClass(toHex(fill))}`} style={{ background: fill }}>
@@ -4221,12 +4295,12 @@ import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
-import { buildCountScale } from './lib/colorScale'
-import { summarizeMonth, VERDICT_LABELS } from './lib/indices'
+import { buildCountScale, fmtCount } from './lib/colorScale'
+import { calendarMedians, summarizeMonth, VERDICT_LABELS } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
-import { SERIES_LABELS, type Manifest } from './lib/types'
+import { SERIES_LABELS, type Manifest, type SeriesKey } from './lib/types'
 import { initialState, quickRanges, reducer, type AppState } from './state/appState'
 
 export default function App() {
@@ -4272,10 +4346,12 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const seriesLabel = SERIES_LABELS[s.source]
   const ready = !!series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
 
+  // The calendar's median row is coloured too, so the medians join the bins and the legend covers them.
+  const medians = useMemo(() => (series ? calendarMedians(values, series.months, m.baseline_years) : []), [series, values, m.baseline_years])
   const calendarScale = useMemo(() => buildCountScale(
-    s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values,
+    [...(s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values), ...medians],
     { ...RAMP, palette: s.palette },
-  ), [values, i0, i1, s.scaleTo, s.palette])
+  ), [values, medians, i0, i1, s.scaleTo, s.palette])
 
   const { cells, mapScale } = useMemo(() => {
     if (!data.selection || i0 < 0) return { cells: EMPTY_FC, mapScale: null }
@@ -4314,10 +4390,10 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
       body: () => !ready ? needsArea : <>
         <Legend id="cal-legend" scale={calendarScale} showNrt
           title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
-        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
-          statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
+        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale} medians={medians}
+          statusOf={(ym) => monthStatus(m, ym, s.source)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
           legendId="cal-legend" onFocusMonth={setHoverMonth} />
-        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
+        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} source={s.source} />
       </> },
   ]
   const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
@@ -4371,6 +4447,8 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const headline: ReactNode = !s.area ? 'Choose an area to begin.'
     : data.coverage === 'none' ? 'No data is loaded for this area yet.'
     : !focus || focus.value === null ? `${s.area.label}: loading…`
+    // A month that is not finished gets no verdict: its total is still growing.
+    : monthStatus(m, s.to) === 'partial' ? <><strong>{longLabelYm(s.to)}</strong> (month to date): {fmtCount(focus.value)} hotspots so far · not comparable until the month ends</>
     : <><strong>{longLabelYm(s.to)}</strong>: {Math.round(focus.value).toLocaleString('en-GB')} hotspots
         {focus.verdict && focus.percentile !== null && <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile)</>}</>
 
@@ -4413,17 +4491,23 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   )
 }
 
-function CellDetail({ ym, values, months, manifest, seriesLabel }: {
-  ym: YearMonth | null; values: (number | null)[]; months: YearMonth[]; manifest: Manifest; seriesLabel: string
+function CellDetail({ ym, values, months, manifest, seriesLabel, source }: {
+  ym: YearMonth | null; values: (number | null)[]; months: YearMonth[]; manifest: Manifest; seriesLabel: string; source: SeriesKey
 }) {
   if (!ym) return <p className="cell-detail muted small">Hover or use the arrow keys on the calendar to see one month in detail.</p>
   const sum = summarizeMonth(values, months, ym, manifest.baseline_years)
   const sensors = sensorsIn(manifest, ym).map((x) => x.label).join(', ') || 'none'
+  const [y0, y1] = manifest.baseline_years
+  let compare = ''
+  if (monthStatus(manifest, ym, source) === 'partial') compare = 'Month to date: not comparable with full months yet. '
+  else if (sum.rank && sum.baseline && sum.value !== null) {
+    const med = sum.baseline.median
+    compare = `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; `
+      + (med > 0 ? `${Math.round((sum.value / med) * 100)}% of the ${y0}–${y1} median (${fmtCount(med)}). ` : `the ${y0}–${y1} median is 0. `)
+  }
   return (
     <p className="cell-detail" aria-live="polite">
-      <strong>{labelYm(ym)}</strong>: {sum.value === null ? 'no data' : `${Math.round(sum.value).toLocaleString('en-GB')} hotspots detected`} ({seriesLabel}).{' '}
-      {sum.rank && sum.vsMedianPct !== null && `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${Math.round(100 + sum.vsMedianPct)}% of the ${manifest.baseline_years[0]}–${manifest.baseline_years[1]} median (${Math.round(sum.baseline!.median)}). `}
-      Sensors: {sensors}.
+      <strong>{labelYm(ym)}</strong>: {sum.value === null ? 'no data' : `${fmtCount(sum.value)} hotspots detected`} ({seriesLabel}). {compare}Sensors: {sensors}.
     </p>
   )
 }
@@ -4432,14 +4516,16 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck and test**
 
 Run: `npx tsc -b && npm test`
-Expected: `Tests  63 passed (63)`
+Expected: `Tests  66 passed (66)`
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] The guide now has 7 steps (Dates and Calendar added).
 - [ ] Calendar box: the drawer slides in from the right with the full table: years 2000 to 2026, year totals, the median row. Nov 2026 has a yellow outline (month to date); Jul to Oct 2026 have dotted borders (NRT).
 - [ ] Dates box, "Last 5 years": the calendar shrinks to 2022 to 2026, its legend edges change, and the map colours and the strip legend change. **This is the "colours relative to the time range" requirement.**
 - [ ] Layers box, "Calendar colours scaled to: the whole record": recent years look different again. Switch the data to MODIS, then VIIRS S-NPP: values change and pre-2012 VIIRS cells are hatched. Inferno and cividis both work.
-- [ ] Tab into the calendar and use the arrow keys: focus moves and the detail line updates. "Show numbers in cells" prints the values.
+- [ ] Tab into the calendar and use the arrow keys: focus moves and the detail line updates ("Rank … of …; …% of the 2003–2025 median"). "Show numbers in cells" prints the values, and each one sits inside its legend range.
+- [ ] "Last 12 months": 2025 shows "(2 of 12 months)" next to its total, with a faded bar. Months outside the range are grey.
+- [ ] Set To = November 2026: the strip says "month to date … not comparable until the month ends", with no verdict.
 
 - [ ] **Step 4: Commit**
 
@@ -4496,12 +4582,16 @@ Expected: FAIL, `Failed to resolve import "./KpiRow"`.
 
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+import { MIN_DENOMINATOR } from '../config'
 import { fmtCount } from '../lib/colorScale'
-import { VERDICT_LABELS, type MonthSummary, type YearToDate } from '../lib/indices'
+import { relativeAnomaly, VERDICT_LABELS, type MonthSummary, type YearToDate } from '../lib/indices'
 import { longLabelYm, MONTH_LONG, parseYm, type YearMonth } from '../lib/months'
 import { STATUS_LABELS, type MonthStatus } from '../lib/status'
 
 const pct = (x: number) => `${x >= 0 ? '+' : '−'}${Math.abs(Math.round(x))}%`
+/** A percentage when the reference is big enough to divide by, otherwise the plain difference in hotspots. */
+const diff = (value: number, ref: number) =>
+  ref >= MIN_DENOMINATOR ? pct(relativeAnomaly(value, ref)) : `${value >= ref ? '+' : '−'}${fmtCount(Math.abs(value - ref))}`
 const ordinal = (n: number) => {
   const s = n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')
   return `${n}${s}`
@@ -4521,10 +4611,13 @@ export interface KpiRowProps {
 }
 
 export function KpiRow(p: KpiRowProps) {
-  const f = p.focus
+  const partial = p.focusStatus === 'partial'
+  // A month that is not finished is not compared: its total is still growing.
+  const f = partial ? { ...p.focus, verdict: null, percentile: null, rank: null } : p.focus
   const calName = MONTH_LONG[parseYm(f.month).month - 1]
   const n = f.baseline?.values.length ?? 0
   const [y0, y1] = p.baselineYears
+  const ytd = partial ? null : p.ytd
   return (
     <section aria-labelledby="kpi-title">
       <h2 id="kpi-title">Summary</h2>
@@ -4539,17 +4632,17 @@ export function KpiRow(p: KpiRowProps) {
           <div className="value">{f.value === null ? 'n/a' : fmtCount(f.value)}</div>
           {f.verdict && f.percentile !== null
             ? <div><span className={`verdict verdict-${f.verdict}`}>{VERDICT_LABELS[f.verdict]}</span> <span className="small">{ordinal(Math.round(f.percentile))} percentile of {n} {calName}s</span></div>
-            : <div className="small">Not enough baseline years to compare.</div>}
+            : <div className="small">{partial ? 'Month not finished: no comparison yet.' : 'Not enough baseline years to compare.'}</div>}
         </div>
         <div className="kpi">
           <div className="small muted">vs multi-year average for {calName}</div>
-          <div className="value">{f.vsMeanPct === null ? 'n/a' : pct(f.vsMeanPct)}</div>
-          {f.baseline && <div className="small">Average {fmtCount(f.baseline.mean)}, median {fmtCount(f.baseline.median)} ({f.vsMedianPct === null ? '' : pct(f.vsMedianPct)}){f.z !== null ? `, z = ${f.z.toFixed(1)}` : ''}</div>}
+          <div className="value">{partial || f.value === null || !f.baseline ? 'n/a' : diff(f.value, f.baseline.mean)}</div>
+          {!partial && f.baseline && f.value !== null && <div className="small">Average {fmtCount(f.baseline.mean)}, median {fmtCount(f.baseline.median)} ({diff(f.value, f.baseline.median)}){f.z !== null ? `, z = ${f.z.toFixed(1)}` : ''}</div>}
         </div>
         <div className="kpi">
           <div className="small muted">Year to date (January to {calName})</div>
-          <div className="value">{p.ytd ? pct(p.ytd.anomalyPct) : 'n/a'}</div>
-          {p.ytd && <div className="small">{fmtCount(p.ytd.current)} vs typical {fmtCount(p.ytd.typical)}</div>}
+          <div className="value">{ytd ? diff(ytd.current, ytd.typical) : 'n/a'}</div>
+          {ytd && <div className="small">{fmtCount(ytd.current)} vs typical {fmtCount(ytd.typical)}</div>}
         </div>
         <div className="kpi">
           <div className="small muted">Rank among {calName}s</div>
@@ -5166,12 +5259,12 @@ import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
-import { buildCountScale } from './lib/colorScale'
-import { summarizeMonth, VERDICT_LABELS, yearToDate } from './lib/indices'
+import { buildCountScale, fmtCount } from './lib/colorScale'
+import { calendarMedians, summarizeMonth, VERDICT_LABELS, yearToDate } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm, parseYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
-import { SERIES_LABELS, type Manifest } from './lib/types'
+import { SERIES_LABELS, type Manifest, type SeriesKey } from './lib/types'
 import { initialState, quickRanges, reducer, type AppState } from './state/appState'
 import { applyUrl, parseHash, toHash } from './state/urlState'
 
@@ -5226,10 +5319,12 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
   const seriesLabel = SERIES_LABELS[s.source]
   const ready = !!series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
 
+  // The calendar's median row is coloured too, so the medians join the bins and the legend covers them.
+  const medians = useMemo(() => (series ? calendarMedians(values, series.months, m.baseline_years) : []), [series, values, m.baseline_years])
   const calendarScale = useMemo(() => buildCountScale(
-    s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values,
+    [...(s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values), ...medians],
     { ...RAMP, palette: s.palette },
-  ), [values, i0, i1, s.scaleTo, s.palette])
+  ), [values, medians, i0, i1, s.scaleTo, s.palette])
 
   const { cells, mapScale } = useMemo(() => {
     if (!data.selection || i0 < 0) return { cells: EMPTY_FC, mapScale: null }
@@ -5277,10 +5372,10 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
       body: () => !ready ? needsArea : <>
         <Legend id="cal-legend" scale={calendarScale} showNrt
           title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
-        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
-          statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
+        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale} medians={medians}
+          statusOf={(ym) => monthStatus(m, ym, s.source)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
           legendId="cal-legend" onFocusMonth={setHoverMonth} />
-        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
+        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} source={s.source} />
       </> },
     { id: 'trends', side: 'right', wide: true, label: 'Trends', icon: <ChartLine aria-hidden />, title: 'Historical comparison',
       guide: 'This year against a typical year, and every month against the multi-year average.',
@@ -5349,6 +5444,8 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
   const headline: ReactNode = !s.area ? 'Choose an area to begin.'
     : data.coverage === 'none' ? 'No data is loaded for this area yet.'
     : !focus || focus.value === null ? `${s.area.label}: loading…`
+    // A month that is not finished gets no verdict: its total is still growing.
+    : monthStatus(m, s.to) === 'partial' ? <><strong>{longLabelYm(s.to)}</strong> (month to date): {fmtCount(focus.value)} hotspots so far · not comparable until the month ends</>
     : <><strong>{longLabelYm(s.to)}</strong>: {Math.round(focus.value).toLocaleString('en-GB')} hotspots
         {focus.verdict && focus.percentile !== null && <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile)</>}</>
 
@@ -5384,7 +5481,7 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
           : <span className="small muted">Choose an area to colour the globe.</span>}
         more={<>
           {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel}
-            focus={focus} focusStatus={monthStatus(m, s.to)} ytd={ytd} baselineYears={m.baseline_years} sensorsLine={sensorsLine} />}
+            focus={focus} focusStatus={monthStatus(m, s.to, s.source)} ytd={ytd} baselineYears={m.baseline_years} sensorsLine={sensorsLine} />}
           <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
           <p className="small muted">Colours show satellite hotspot detections, not fires or burned area. They are rebuilt for the months you choose, so the full ramp is always used.</p>
         </>} />
@@ -5393,17 +5490,23 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
   )
 }
 
-function CellDetail({ ym, values, months, manifest, seriesLabel }: {
-  ym: YearMonth | null; values: (number | null)[]; months: YearMonth[]; manifest: Manifest; seriesLabel: string
+function CellDetail({ ym, values, months, manifest, seriesLabel, source }: {
+  ym: YearMonth | null; values: (number | null)[]; months: YearMonth[]; manifest: Manifest; seriesLabel: string; source: SeriesKey
 }) {
   if (!ym) return <p className="cell-detail muted small">Hover or use the arrow keys on the calendar to see one month in detail.</p>
   const sum = summarizeMonth(values, months, ym, manifest.baseline_years)
   const sensors = sensorsIn(manifest, ym).map((x) => x.label).join(', ') || 'none'
+  const [y0, y1] = manifest.baseline_years
+  let compare = ''
+  if (monthStatus(manifest, ym, source) === 'partial') compare = 'Month to date: not comparable with full months yet. '
+  else if (sum.rank && sum.baseline && sum.value !== null) {
+    const med = sum.baseline.median
+    compare = `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; `
+      + (med > 0 ? `${Math.round((sum.value / med) * 100)}% of the ${y0}–${y1} median (${fmtCount(med)}). ` : `the ${y0}–${y1} median is 0. `)
+  }
   return (
     <p className="cell-detail" aria-live="polite">
-      <strong>{labelYm(ym)}</strong>: {sum.value === null ? 'no data' : `${Math.round(sum.value).toLocaleString('en-GB')} hotspots detected`} ({seriesLabel}).{' '}
-      {sum.rank && sum.vsMedianPct !== null && `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${Math.round(100 + sum.vsMedianPct)}% of the ${manifest.baseline_years[0]}–${manifest.baseline_years[1]} median (${Math.round(sum.baseline!.median)}). `}
-      Sensors: {sensors}.
+      <strong>{labelYm(ym)}</strong>: {sum.value === null ? 'no data' : `${fmtCount(sum.value)} hotspots detected`} ({seriesLabel}). {compare}Sensors: {sensors}.
     </p>
   )
 }
@@ -5412,7 +5515,7 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: `Tests  68 passed (68)`; oxlint shows warnings only.
+Expected: `Tests  71 passed (71)`; oxlint shows warnings only.
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] More info shows the summary cards: "October 2026 (Near real-time: provisional)", a verdict with a coloured dot and its percentile, the anomaly against the average and the median, year to date, rank, and a caption naming 2003 to 2025 and the sensors.
@@ -5739,7 +5842,7 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 - [ ] Open the URL in a private window and on a phone.
 
 #### ✅ CHECKPOINT 5: Ready to publish. Stop and review with Aziz
-`npm test` (68), `npm run test:e2e` (19), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
+`npm test` (71), `npm run test:e2e` (19), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
 
 ---
 
