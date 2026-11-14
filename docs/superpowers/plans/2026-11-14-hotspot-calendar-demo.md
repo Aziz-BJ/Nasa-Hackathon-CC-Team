@@ -25,7 +25,7 @@
 - Commits made by Claude end with the `Co-Authored-By` line from the session instructions.
 
 **What was already proven on 14 Nov 2026 (throwaway spike).** Every code block below was typechecked with `tsc -b` (strict) and run:
-- 59 unit tests and 17 Playwright tests (desktop and phone, including axe accessibility) pass.
+- 60 unit tests and 17 Playwright tests (desktop and phone, including axe accessibility) pass.
 - MapLibre 6 globe + NASA GIBS Blue Marble tiles + Terra Draw circle drawing work in dev, in the production build, and in headless Chromium.
 - Pitfalls already solved, so don't "fix" them back:
   1. `maplibre-gl` 6 has **no default export**: use `import { Map } from 'maplibre-gl'`.
@@ -42,6 +42,10 @@
      - A thin area with no cell centre falls back to its centre cell.
      - Manifest validation is stricter, and a broken `reported.json` is ignored instead of breaking the app.
      - Anomaly colour bins are symmetric.
+  9. Found by the Checkpoint 2 verifier and fixed:
+     - Drawn shapes follow the typed rules (`validateDrawn`): a shape crossing the 180° line is rejected instead of becoming a band around the globe, and the size limit applies.
+     - The coordinate type switch uses native radio buttons (valid ARIA, arrow keys).
+     - The skip link targets `#main`, which exists on both pages.
 - **Background browser tabs don't render WebGL.** If the globe looks blank while you test in a hidden pane or a background tab, bring the tab to the front before debugging.
 
 **TO CONFIRM (asks for the team, none of them block Checkpoints 1 to 5):**
@@ -152,10 +156,10 @@ Each checkpoint ends with a stop: run the checks, show Aziz the result, commit a
 
 | # | Name | Tasks | Aziz sees | Proof |
 | --- | --- | --- | --- | --- |
-| 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 41 pass; `npm run build` exits 1 |
-| 2 | Globe and area | 9–13 | The globe; choose an area 4 ways; coloured cells; area summary | 48 pass; manual check list |
-| 3 | Calendar and colour ramps | 14–16 | Month range, data toggle, burning calendar, colours that rescale | 54 pass; manual check list |
-| 4 | Indices, charts, download | 17–22 | Verdict cards, season, anomaly, overlap and reported charts, CSV, share link | 54 pass; manual check list |
+| 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 42 pass; `npm run build` exits 1 |
+| 2 | Globe and area | 9–13 | The globe; choose an area 4 ways; coloured cells; area summary | 49 pass; manual check list |
+| 3 | Calendar and colour ramps | 14–16 | Month range, data toggle, burning calendar, colours that rescale | 55 pass; manual check list |
+| 4 | Indices, charts, download | 17–22 | Verdict cards, season, anomaly, overlap and reported charts, CSV, share link | 55 pass; manual check list |
 | 5 | Ready to publish | 23–26 | e2e + axe green on desktop and phone, docs, QA sign-off | `npm run test:e2e` 17 pass |
 | 6 | Real data (after the pipeline delivers) | 27 | Same app on FIRMS data | build passes, no banner |
 
@@ -745,7 +749,7 @@ git commit -m "demo: settings, tiled data contract types and validated loader"
 ```ts
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
-import { areaFromBbox, areaFromPoint, checkSize, validateBbox, validatePoint } from './area'
+import { areaFromBbox, areaFromPoint, areaFromPolygon, checkSize, validateBbox, validateDrawn, validatePoint } from './area'
 
 describe('area', () => {
   it('validates boxes in west, south, east, north order', () => {
@@ -770,6 +774,13 @@ describe('area', () => {
   })
   it('rejects areas over the size limit', () => {
     expect(checkSize(areaFromBbox([-180, -60, 180, 80]))).toMatch(/limit/)
+  })
+  it('applies the typed-coordinate rules to drawn shapes', () => {
+    const ring = (lons: number[]) => areaFromPolygon({ type: 'Polygon', coordinates: [[[lons[0], 60], [lons[1], 60], [lons[1], 65], [lons[0], 65], [lons[0], 60]]] })
+    expect(validateDrawn(ring([175, -175]))).toMatch(/180° line/) // wraps from +175 to -175
+    expect(validateDrawn(ring([170, 190]))).toMatch(/180° line/) // longitudes past 180
+    expect(validateDrawn(areaFromBbox([-60, -50, 60, 50]))).toMatch(/limit/)
+    expect(validateDrawn(areaFromBbox([0, 0, 1, 1]))).toBeNull()
   })
 })
 ```
@@ -924,6 +935,14 @@ export function areaFromPoint(lat: number, lon: number, radiusKm: number): Area 
 
 export function areaFromPolygon(geometry: GeoJSON.Polygon, label = 'Drawn area'): Area {
   return finish(geometry, label, 'drawn')
+}
+
+/** Drawn shapes follow the same rules as typed ones: no 180° crossing, and the size limit. */
+export function validateDrawn(a: Area): string | null {
+  const ring = a.geometry.coordinates[0]
+  const crosses = ring.some(([lon], i) => Math.abs(lon) > 180 || (i > 0 && Math.abs(lon - ring[i - 1][0]) > 180))
+  if (crosses) return 'This shape crosses the 180° line, which is not supported yet. Draw it on one side of the line.'
+  return checkSize(a)
 }
 
 export function areaFromPreset(p: { id: string; name: string; bbox: Bbox }): Area {
@@ -1112,7 +1131,7 @@ export function coverageOf(m: Manifest, area: Area): 'none' | 'partial' | 'full'
 - [ ] **Step 4: Run them to see them pass**
 
 Run: `npx vitest run src/lib/area.test.ts src/lib/aggregate.test.ts`
-Expected: `Tests  11 passed (11)`
+Expected: `Tests  12 passed (12)`
 
 - [ ] **Step 5: Commit**
 
@@ -2037,7 +2056,7 @@ Expected: `Build stopped: dataset "_mock" is MOCK DATA. …` then `exit 1`
 - [ ] **Step 6: Run every engine test**
 
 Run: `npm test`
-Expected: `Tests  41 passed (41)`
+Expected: `Tests  42 passed (42)`
 
 - [ ] **Step 7: Commit**
 
@@ -2047,7 +2066,7 @@ git commit -m "demo: deterministic mock data generator and no-mock build guard"
 ```
 
 #### ✅ CHECKPOINT 1: Engine. Stop and review with Aziz
-- `npm test`: 41 pass. `npm run check-data`: exit 1 on mock data.
+- `npm test`: 42 pass. `npm run check-data`: exit 1 on mock data.
 - Open `public/data/_mock/manifest.json` together: is the tiled contract (section 2.3) acceptable to send to Andre and Pierre?
 - Review `src/config.ts` values (TO CONFIRM 3).
 - Add a row to `docs/AI_USE.md` (date, files, "engine generated with Claude from the plan").
@@ -2822,10 +2841,11 @@ export function CoordinateForm({ onArea }: { onArea: (a: Area) => void }) {
 
   return (
     <form onSubmit={submit} noValidate aria-label="Enter coordinates">
-      <div role="radiogroup" aria-label="Coordinate type" className="tools">
-        <button type="button" className="btn" role="radio" aria-checked={mode === 'bbox'} aria-pressed={mode === 'bbox'} onClick={() => setMode('bbox')}>Box</button>
-        <button type="button" className="btn" role="radio" aria-checked={mode === 'point'} aria-pressed={mode === 'point'} onClick={() => setMode('point')}>Point + radius</button>
-      </div>
+      <fieldset>
+        <legend className="small">Coordinate type</legend>
+        <label><input type="radio" name="coord-mode" checked={mode === 'bbox'} onChange={() => setMode('bbox')} /> Box</label>
+        <label><input type="radio" name="coord-mode" checked={mode === 'point'} onChange={() => setMode('point')} /> Point + radius</label>
+      </fieldset>
       <p id="coord-hint" className="small muted">Decimal degrees. Latitude −90 to 90, longitude −180 to 180.</p>
       {mode === 'bbox' ? (
         <div className="row">
@@ -2875,9 +2895,11 @@ export interface AreaPanelProps {
   tool: DrawTool
   onTool: (t: DrawTool) => void
   onArea: (a: Area) => void
+  /** Why the last drawn shape was rejected, if it was. */
+  error?: string | null
 }
 
-export function AreaPanel({ presets, area, tool, onTool, onArea }: AreaPanelProps) {
+export function AreaPanel({ presets, area, tool, onTool, onArea, error }: AreaPanelProps) {
   const presetValue = area?.source === 'preset' ? area.presetId ?? '' : ''
   return (
     <fieldset>
@@ -2901,6 +2923,7 @@ export function AreaPanel({ presets, area, tool, onTool, onArea }: AreaPanelProp
         ))}
       </div>
       <p className="small muted" aria-live="polite">{HELP[tool]}</p>
+      {error && <p className="error small" role="alert">{error}</p>}
       <details>
         <summary>Or type coordinates</summary>
         <CoordinateForm onArea={onArea} />
@@ -2976,7 +2999,7 @@ git commit -m "demo: presets, drawing tools, typed coordinates, legend, area sum
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // Checkpoint 2 version: globe, area selection and area summary. Replaced at checkpoints 3 and 4.
-import { useMemo, useReducer } from 'react'
+import { useMemo, useReducer, useState } from 'react'
 import { AboutPage } from './components/AboutPage'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
@@ -2990,7 +3013,7 @@ import { dataSource } from './dataSource'
 import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
-import { areaFromPreset } from './lib/area'
+import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
 import { labelYm } from './lib/months'
@@ -3010,6 +3033,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
     return mm.presets[0] ? { ...init, area: areaFromPreset(mm.presets[0]) } : init
   })
   const data = useAreaData(dataSource, m, s.area)
+  const [drawError, setDrawError] = useState<string | null>(null)
   const series = data.series
   const i0 = series ? series.months.indexOf(s.from) : -1
   const i1 = series ? series.months.indexOf(s.to) : -1
@@ -3024,20 +3048,24 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 
   return (
     <div className="app">
-      <a href="#results" className="skip-link">Skip to results</a>
+      <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
       <Header view={s.view} onView={(view) => dispatch({ type: 'setView', view })} />
       {s.view === 'about' ? <AboutPage manifest={m} /> : (
         <main className="explore" id="main">
           <aside className="controls" aria-label="Choose an area and months">
-            <AreaPanel presets={m.presets} area={s.area} tool={s.tool}
+            <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
               onTool={(tool) => dispatch({ type: 'setTool', tool })}
-              onArea={(area) => dispatch({ type: 'setArea', area })} />
+              onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
           </aside>
           <section className="map-col" aria-label="Map">
             <div className="globe-wrap">
               <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-                onDrawn={(area) => dispatch({ type: 'setArea', area })} />
+                onDrawn={(area) => {
+                  const err = validateDrawn(area)
+                  setDrawError(err)
+                  dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+                }} />
             </div>
             {mapScale && <Legend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} to ${labelYm(s.to)} (bins fit these months)`} />}
             <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
@@ -3056,7 +3084,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 - [ ] **Step 2: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: no tsc output; `Tests  48 passed (48)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
+Expected: no tsc output; `Tests  49 passed (49)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
 
 - [ ] **Step 3: Run it and check by hand**
 
@@ -3066,6 +3094,7 @@ Check:
 - [ ] The globe shows Blue Marble imagery and flies to "Southern Africa savanna (mock)", whose cells are coloured with a yellow outline.
 - [ ] The preset dropdown, set to "United Kingdom (mock)", flies to the UK.
 - [ ] Circle: drag on the globe and the summary reads "Drawn circle: … km²". Do the same with Rectangle, Polygon and Freehand.
+- [ ] Zoom out fully and draw a huge circle: a red message explains the size limit, and the area does not change.
 - [ ] "Or type coordinates": West `5`, East `1` shows the 180° message; a valid box works; Point + radius works.
 - [ ] A box over South America says "No data is loaded for this area yet".
 - [ ] "About & methods" opens, "Explore" comes back.
@@ -3521,7 +3550,7 @@ import { dataSource } from './dataSource'
 import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
-import { areaFromPreset } from './lib/area'
+import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
 import { summarizeMonth } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
@@ -3543,6 +3572,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
     return mm.presets[0] ? { ...init, area: areaFromPreset(mm.presets[0]) } : init
   })
   const data = useAreaData(dataSource, m, s.area)
+  const [drawError, setDrawError] = useState<string | null>(null)
   const [hoverMonth, setHoverMonth] = useState<YearMonth | null>(null)
   useEffect(() => setHoverMonth(null), [s.area, s.source])
 
@@ -3570,15 +3600,15 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 
   return (
     <div className="app">
-      <a href="#results" className="skip-link">Skip to results</a>
+      <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
       <Header view={s.view} onView={(view) => dispatch({ type: 'setView', view })} />
       {s.view === 'about' ? <AboutPage manifest={m} /> : (
         <main className="explore" id="main">
           <aside className="controls" aria-label="Choose an area and months">
-            <AreaPanel presets={m.presets} area={s.area} tool={s.tool}
+            <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
               onTool={(tool) => dispatch({ type: 'setTool', tool })}
-              onArea={(area) => dispatch({ type: 'setArea', area })} />
+              onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
             <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
               quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} />
             <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
@@ -3591,7 +3621,11 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
           <section className="map-col" aria-label="Map">
             <div className="globe-wrap">
               <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-                onDrawn={(area) => dispatch({ type: 'setArea', area })} />
+                onDrawn={(area) => {
+                  const err = validateDrawn(area)
+                  setDrawError(err)
+                  dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+                }} />
             </div>
             {mapScale && <Legend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} to ${labelYm(s.to)} (bins fit these months)`} />}
             <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
@@ -3638,7 +3672,7 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck and test**
 
 Run: `npx tsc -b && npm test`
-Expected: `Tests  54 passed (54)`
+Expected: `Tests  55 passed (55)`
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] The calendar shows years 2000 to 2026. Nov 2026 has a yellow outline (month to date). Jul to Oct 2026 have dotted borders (NRT). Nov 2000 to Feb 2001 for "VIIRS S-NPP only" are hatched.
@@ -4346,7 +4380,7 @@ import { dataSource } from './dataSource'
 import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
-import { areaFromPreset } from './lib/area'
+import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
 import { summarizeMonth, yearToDate } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
@@ -4377,6 +4411,7 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     return () => window.removeEventListener('hashchange', onHash)
   }, [m])
   const data = useAreaData(dataSource, m, s.area)
+  const [drawError, setDrawError] = useState<string | null>(null)
   const [hoverMonth, setHoverMonth] = useState<YearMonth | null>(null)
   useEffect(() => setHoverMonth(null), [s.area, s.source])
 
@@ -4414,15 +4449,15 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
 
   return (
     <div className="app">
-      <a href="#results" className="skip-link">Skip to results</a>
+      <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
       <Header view={s.view} onView={(view) => dispatch({ type: 'setView', view })} />
       {s.view === 'about' ? <AboutPage manifest={m} /> : (
         <main className="explore" id="main">
           <aside className="controls" aria-label="Choose an area and months">
-            <AreaPanel presets={m.presets} area={s.area} tool={s.tool}
+            <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
               onTool={(tool) => dispatch({ type: 'setTool', tool })}
-              onArea={(area) => dispatch({ type: 'setArea', area })} />
+              onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
             <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
               quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} />
             <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
@@ -4435,7 +4470,11 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
           <section className="map-col" aria-label="Map">
             <div className="globe-wrap">
               <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-                onDrawn={(area) => dispatch({ type: 'setArea', area })} />
+                onDrawn={(area) => {
+                  const err = validateDrawn(area)
+                  setDrawError(err)
+                  dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+                }} />
             </div>
             {mapScale && <Legend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} to ${labelYm(s.to)} (bins fit these months)`} />}
             <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
@@ -4494,7 +4533,7 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: `Tests  59 passed (59)`; oxlint shows warnings only.
+Expected: `Tests  60 passed (60)`; oxlint shows warnings only.
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] Summary cards show "October 2026 (Near real-time: provisional)", a verdict word with its percentile, the anomaly vs average and median, year to date, rank, and a caption naming 2003 to 2025 and the sensors.
@@ -4778,7 +4817,7 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 - [ ] Open the URL in a private window and on a phone.
 
 #### ✅ CHECKPOINT 5: Ready to publish. Stop and review with Aziz
-`npm test` (59), `npm run test:e2e` (17), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
+`npm test` (60), `npm run test:e2e` (17), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
 
 ---
 
