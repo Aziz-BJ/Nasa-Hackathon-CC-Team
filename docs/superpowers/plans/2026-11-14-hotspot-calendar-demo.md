@@ -34,6 +34,7 @@
   4. An `<option>` text, or "Median 2003–2025", can match a test locator. The tests use exact or scoped locators.
   5. White text on mid-tone ramp colours fails 4.5:1. The calendar picks black or white text by WCAG contrast, which always gives at least 4.58:1.
   6. A month-to-date total is not comparable with full months. The default range therefore ends at the last *complete* month.
+  7. The repo path contains a space. Scripts turn `import.meta.url` into a path with `fileURLToPath`, never `URL.pathname` (which leaves `%20` and writes to a wrong folder). Found while executing Task 8.
 - **Background browser tabs don't render WebGL.** If the globe looks blank while you test in a hidden pane or a background tab, bring the tab to the front before debugging.
 
 **TO CONFIRM (asks for the team, none of them block Checkpoints 1 to 5):**
@@ -1694,10 +1695,12 @@ git commit -m "demo: CSV export with provenance header"
 // The mock "harmonized" series is a latent signal we invented, NOT a harmonization method.
 // Run: node scripts/make-mock-data.ts   (deterministic: same output every run)
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { cellCentre, cellId, type Bbox } from '../src/lib/grid.ts'
 import { formatYm, monthRange, parseYm } from '../src/lib/months.ts'
 
-const OUT = new URL('../public/data/_mock/', import.meta.url).pathname
+// fileURLToPath, not URL.pathname: the repo folder name contains a space, which .pathname leaves as %20.
+const OUT = fileURLToPath(new URL('../public/data/_mock/', import.meta.url))
 const GRID = 1
 const TILE = 10
 const FIRST = '2000-11'
@@ -1885,10 +1888,11 @@ void formatYm
 //   node scripts/check-data.mjs pre   -> fail if the chosen dataset is mock, unless ALLOW_MOCK=1
 //   node scripts/check-data.mjs post  -> remove dist/data/_mock from real builds
 import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
 const dataset = process.env.VITE_DATASET ?? '_mock'
 const allowMock = process.env.ALLOW_MOCK === '1'
-const root = new URL('../', import.meta.url).pathname
+const root = fileURLToPath(new URL('../', import.meta.url)) // not .pathname: the repo path contains a space
 
 if (process.argv[2] === 'post') {
   if (!allowMock && existsSync(`${root}dist/data/_mock`)) {
