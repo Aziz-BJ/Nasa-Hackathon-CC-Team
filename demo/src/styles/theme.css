@@ -236,6 +236,7 @@ table.calendar td.total .bar { display: inline-block; height: 0.5rem; border-rad
   .strip-headline { flex: 1 1 0; min-width: 0; font-size: 0.8125rem; }
   .legend-compact .swatch { width: 1.9rem; }
   .legend-compact li:nth-child(n+4):not(:last-child) .tick { visibility: hidden; }
+  .strip-more-wrap[data-open='true'] > .strip-more { max-height: 46vh; }
   .drawer, .drawer-wide { left: 10px; right: 10px; width: auto; top: calc(var(--banner-h) + var(--top-h) + 16px); bottom: calc(var(--strip-h) + 92px); }
   .drawer-left[data-open='false'], .drawer-right[data-open='false'] { transform: translateY(24px) scale(0.98); }
   .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 92px); }

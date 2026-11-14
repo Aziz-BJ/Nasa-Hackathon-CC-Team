@@ -101,22 +101,38 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const openId = s.view === 'about' ? 'about' : panel
   const byId = (id: string | null) => [...panels, about].find((p) => p.id === id) ?? null
 
+  // On phones a drawer and the expanded strip would cover each other, so only one of them is open at a time.
+  const narrow = () => window.matchMedia('(max-width: 760px)').matches
   const closePanel = useCallback(() => {
-    if (s.view === 'about') { dispatch({ type: 'setView', view: 'explore' }); return }
+    if (s.view === 'about') {
+      dispatch({ type: 'setView', view: 'explore' })
+      document.querySelector<HTMLElement>('[data-tour="about"]')?.focus()
+      return
+    }
     const id = panel
     setPanel(null)
     if (id) document.querySelector<HTMLElement>(`[data-tour="box-${id}"]`)?.focus()
   }, [panel, s.view])
-  const togglePanel = (id: string) => {
+  const openPanel = (id: string, toggle = false) => {
     if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
     const p = byId(id)
     if (p) setShown((sh) => ({ ...sh, [p.side]: id }))
-    setPanel((cur) => (cur === id ? null : id))
+    setPanel((cur) => (toggle && cur === id ? null : id))
+    if (narrow()) setMore(false)
   }
+  const togglePanel = (id: string) => openPanel(id, true)
   const toggleAbout = () => {
     setPanel(null)
     setShown((sh) => ({ ...sh, right: 'about' }))
+    if (narrow()) setMore(false)
     dispatch({ type: 'setView', view: s.view === 'about' ? 'explore' : 'about' })
+  }
+  const toggleMore = () => {
+    if (!more && narrow()) {
+      setPanel(null)
+      if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
+    }
+    setMore((x) => !x)
   }
 
   const guideSteps: GuideStep[] = [
@@ -138,16 +154,17 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
     <div className={m.mock ? 'app has-banner' : 'app'}>
       <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
-      <TopBar selection={selection} onSelectionClick={() => togglePanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
+      <TopBar selection={selection} onSelectionClick={() => openPanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
       <main id="main" tabIndex={-1}>
         <div className="rails">
           <FeatureRail side="left" label="Choose what to show" boxes={panels.filter((p) => p.side === 'left')} open={panel} onToggle={togglePanel} />
           <FeatureRail side="right" label="Analysis" boxes={panels.filter((p) => p.side === 'right')} open={panel} onToggle={togglePanel} />
         </div>
+        {/* Both drawers are always in the page, so even the first opening slides in. */}
         {(['left', 'right'] as const).map((side) => {
           const p = byId(shown[side])
-          return p && (
-            <Drawer key={side} open={openId === p.id} side={side} wide={p.wide} title={p.title} onClose={closePanel}>{p.body()}</Drawer>
+          return (
+            <Drawer key={side} open={!!p && openId === p.id} side={side} wide={p?.wide} title={p?.title ?? ''} onClose={closePanel}>{p?.body()}</Drawer>
           )
         })}
         <div className="map-full">
@@ -159,7 +176,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
             }} />
         </div>
       </main>
-      <BottomStrip expanded={more} onToggle={() => setMore((x) => !x)} headline={headline}
+      <BottomStrip expanded={more} onToggle={toggleMore} headline={headline}
         legend={mapScale
           ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
           : <span className="small muted">Choose an area to colour the globe.</span>}

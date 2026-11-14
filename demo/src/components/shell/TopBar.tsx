@@ -23,7 +23,7 @@ export function TopBar({ selection, onSelectionClick, onGuide, onAbout }: TopBar
       </button>
       <div className="topbar-actions">
         <button type="button" className="round-btn" data-tour="guide" aria-label="Guide" title="Guide" onClick={onGuide}><Question weight="bold" aria-hidden /></button>
-        <button type="button" className="round-btn" aria-label="About" title="About and methods" onClick={onAbout}><Info weight="bold" aria-hidden /></button>
+        <button type="button" className="round-btn" data-tour="about" aria-label="About" title="About and methods" onClick={onAbout}><Info weight="bold" aria-hidden /></button>
       </div>
     </header>
   )

@@ -2,7 +2,8 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { GuideTour, guideSeen, markGuideSeen } from './GuideTour'
+import { Drawer } from './Drawer'
+import { cardStyle, GuideTour, guideSeen, markGuideSeen } from './GuideTour'
 
 const steps = [
   { target: null, title: 'Welcome', text: 'Intro' },
@@ -35,5 +36,23 @@ describe('GuideTour', () => {
     expect(guideSeen()).toBe(false)
     markGuideSeen()
     expect(guideSeen()).toBe(true)
+  })
+  it('gives focus back on close, and its Esc does not close a drawer underneath', async () => {
+    const onGuideClose = vi.fn()
+    const onDrawerClose = vi.fn()
+    const { rerender } = render(<><button>Guide</button><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer></>)
+    screen.getByRole('button', { name: 'Guide' }).focus()
+    rerender(<><button>Guide</button><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer><GuideTour steps={steps} onClose={onGuideClose} /></>)
+    await userEvent.keyboard('{Escape}')
+    expect(onGuideClose).toHaveBeenCalledTimes(1)
+    expect(onDrawerClose).not.toHaveBeenCalled()
+    rerender(<><button>Guide</button><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer></>)
+    expect(screen.getByRole('button', { name: 'Guide' })).toHaveFocus()
+  })
+  it('places the card above a target it cannot sit beside', () => {
+    // Phone: 390 wide, a box near the bottom
+    const box = { left: 11, right: 83, top: 608, bottom: 675, width: 72, height: 67 } as DOMRect
+    const style = cardStyle(box, 390, 844)
+    expect(Number(style.top) + 230).toBeLessThanOrEqual(box.top)
   })
 })

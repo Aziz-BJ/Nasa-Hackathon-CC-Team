@@ -17,6 +17,7 @@ export interface FeatureRailProps {
 }
 
 export function FeatureRail({ side, label, boxes, open, onToggle }: FeatureRailProps) {
+  if (boxes.length === 0) return null
   return (
     <nav className={`rail rail-${side}`} aria-label={label}>
       {boxes.map((b) => (

@@ -21,7 +21,7 @@ export function Drawer({ open, side, wide = false, title, onClose, children }: D
   useEffect(() => { if (open) ref.current?.focus() }, [open, title])
   useEffect(() => {
     if (!open) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onCloseRef.current() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [open])

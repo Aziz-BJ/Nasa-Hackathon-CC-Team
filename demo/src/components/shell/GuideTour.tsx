@@ -20,17 +20,18 @@ export function markGuideSeen() {
 }
 
 const CARD_W = 320
+const CARD_H = 230
+const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(x, hi))
 
-function cardStyle(r: DOMRect | null): CSSProperties {
+/** Beside the target if it fits, otherwise above it (or below), never on top of it. */
+export function cardStyle(r: DOMRect | null, vw = window.innerWidth, vh = window.innerHeight): CSSProperties {
   if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  let left = r.right + 16
-  if (left + CARD_W > vw - 8) left = r.left - CARD_W - 16
-  if (left < 8) left = Math.min(Math.max(8, r.left), vw - CARD_W - 8)
-  let top = r.top
-  if (top + 220 > vh - 8) top = Math.max(8, r.top - 230)
-  return { left, top }
+  const w = Math.min(CARD_W, vw - 20)
+  const top = clamp(r.top, 8, vh - CARD_H - 8)
+  if (r.right + 16 + w <= vw - 8) return { left: r.right + 16, top }
+  if (r.left - 16 - w >= 8) return { left: r.left - 16 - w, top }
+  const left = clamp(r.left + r.width / 2 - w / 2, 8, vw - w - 8)
+  return { left, top: r.top - CARD_H - 16 >= 8 ? r.top - CARD_H - 16 : Math.min(r.bottom + 16, vh - CARD_H - 8) }
 }
 
 export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () => void }) {
@@ -46,10 +47,18 @@ export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () 
     el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
     setRect(el ? el.getBoundingClientRect() : null)
   }, [step])
+  // Remember what had focus before the guide opened (usually the Guide button), and give it back on close.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null)
+  useEffect(() => () => opener?.focus?.(), [opener])
   useEffect(() => { cardRef.current?.focus() }, [i])
 
   function onKey(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Escape') onClose()
+    if (e.key === 'Escape') {
+      // The guide is on top: Esc closes only the guide, not a drawer underneath.
+      e.preventDefault()
+      e.stopPropagation()
+      onClose()
+    }
     else if (e.key === 'ArrowRight' && !last) setI(i + 1)
     else if (e.key === 'ArrowLeft' && i > 0) setI(i - 1)
     else if (e.key === 'Tab') {

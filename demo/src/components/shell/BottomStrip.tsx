@@ -1,7 +1,7 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // The small bar along the bottom: what the colours mean, a one-line verdict, and "More info".
 import { CaretDown, CaretUp } from '@phosphor-icons/react'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 
 export interface BottomStripProps {
   legend: ReactNode
@@ -13,8 +13,18 @@ export interface BottomStripProps {
 }
 
 export function BottomStrip({ legend, headline, expanded, onToggle, more }: BottomStripProps) {
+  const ref = useRef<HTMLElement>(null)
+  // Everything that floats above the strip reads --strip-h, so it never ends up underneath it.
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const root = document.documentElement
+    const ro = new ResizeObserver(() => root.style.setProperty('--strip-h', `${Math.ceil(el.getBoundingClientRect().height)}px`))
+    ro.observe(el)
+    return () => { ro.disconnect(); root.style.removeProperty('--strip-h') }
+  }, [])
   return (
-    <section className="strip" aria-label="Legend and summary" data-tour="strip">
+    <section ref={ref} className="strip" aria-label="Legend and summary" data-tour="strip">
       <div className="strip-more-wrap" data-open={expanded} inert={!expanded} aria-hidden={!expanded}>
         {/* Focusable when open, so keyboard users can scroll a long summary. */}
         <div className="strip-more" id="strip-more" role="region" aria-label="Summary details" tabIndex={expanded ? 0 : -1}>{more}</div>
