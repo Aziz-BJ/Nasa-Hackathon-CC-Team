@@ -25,7 +25,7 @@
 - Commits made by Claude end with the `Co-Authored-By` line from the session instructions.
 
 **What was already proven on 14 Nov 2026 (throwaway spike).** Every code block below was typechecked with `tsc -b` (strict) and run:
-- 54 unit tests and 17 Playwright tests (desktop and phone, including axe accessibility) pass.
+- 59 unit tests and 17 Playwright tests (desktop and phone, including axe accessibility) pass.
 - MapLibre 6 globe + NASA GIBS Blue Marble tiles + Terra Draw circle drawing work in dev, in the production build, and in headless Chromium.
 - Pitfalls already solved, so don't "fix" them back:
   1. `maplibre-gl` 6 has **no default export**: use `import { Map } from 'maplibre-gl'`.
@@ -35,6 +35,13 @@
   5. White text on mid-tone ramp colours fails 4.5:1. The calendar picks black or white text by WCAG contrast, which always gives at least 4.58:1.
   6. A month-to-date total is not comparable with full months. The default range therefore ends at the last *complete* month.
   7. The repo path contains a space. Scripts turn `import.meta.url` into a path with `fileURLToPath`, never `URL.pathname` (which leaves `%20` and writes to a wrong folder). Found while executing Task 8.
+  8. Found by the Checkpoint 1 verifier and fixed:
+     - Year to date only counts complete January-to-month spans, so the November 2000 start doesn't give a false −83%.
+     - Quantile colour bins fall back to log bins when tied low counts collapse them.
+     - Coverage checks points inside the drawn shape, so two adjacent coverage boxes count as covered.
+     - A thin area with no cell centre falls back to its centre cell.
+     - Manifest validation is stricter, and a broken `reported.json` is ignored instead of breaking the app.
+     - Anomaly colour bins are symmetric.
 - **Background browser tabs don't render WebGL.** If the globe looks blank while you test in a hidden pane or a background tab, bring the tab to the front before debugging.
 
 **TO CONFIRM (asks for the team, none of them block Checkpoints 1 to 5):**
@@ -145,9 +152,9 @@ Each checkpoint ends with a stop: run the checks, show Aziz the result, commit a
 
 | # | Name | Tasks | Aziz sees | Proof |
 | --- | --- | --- | --- | --- |
-| 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 36 pass; `npm run build` exits 1 |
-| 2 | Globe and area | 9–13 | The globe; choose an area 4 ways; coloured cells; area summary | 43 pass; manual check list |
-| 3 | Calendar and colour ramps | 14–16 | Month range, data toggle, burning calendar, colours that rescale | 49 pass; manual check list |
+| 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 41 pass; `npm run build` exits 1 |
+| 2 | Globe and area | 9–13 | The globe; choose an area 4 ways; coloured cells; area summary | 48 pass; manual check list |
+| 3 | Calendar and colour ramps | 14–16 | Month range, data toggle, burning calendar, colours that rescale | 54 pass; manual check list |
 | 4 | Indices, charts, download | 17–22 | Verdict cards, season, anomaly, overlap and reported charts, CSV, share link | 54 pass; manual check list |
 | 5 | Ready to publish | 23–26 | e2e + axe green on desktop and phone, docs, QA sign-off | `npm run test:e2e` 17 pass |
 | 6 | Real data (after the pipeline delivers) | 27 | Same app on FIRMS data | build passes, no banner |
@@ -594,6 +601,9 @@ describe('validateManifest', () => {
   })
   it('names the broken field', () => {
     expect(() => validateManifest({ ...minimal, nrt_from: '2026-7' })).toThrow(/nrt_from/)
+    expect(() => validateManifest({ ...minimal, last_month: '2026-13' })).toThrow(/last_month/)
+    expect(() => validateManifest({ ...minimal, first_month: '2027-01' })).toThrow(/first_month must not be after/)
+    expect(() => validateManifest({ ...minimal, sensors: [{ key: 'modis' }] })).toThrow(/sensors\[0\]/)
     expect(() => validateManifest({ ...minimal, schema_version: 2 })).toThrow(DataError)
   })
 })
@@ -614,6 +624,10 @@ describe('createDataSource', () => {
     const html = new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })
     expect(await createDataSource('/', async () => html).reported()).toBeNull()
     expect(await createDataSource('/', async () => new Response('', { status: 404 })).reported()).toBeNull()
+  })
+  it('treats an unreadable reported.json as absent', async () => {
+    const broken = new Response('{not json', { status: 200, headers: { 'content-type': 'application/json' } })
+    expect(await createDataSource('/', async () => broken).reported()).toBeNull()
   })
 })
 ```
@@ -638,7 +652,7 @@ function check(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new DataError(msg)
 }
 
-const YM = /^\d{4}-\d{2}$/
+const isYm = (x: unknown) => typeof x === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(x)
 
 export function validateManifest(raw: unknown): Manifest {
   check(raw !== null && typeof raw === 'object', 'manifest.json is not a JSON object')
@@ -649,13 +663,18 @@ export function validateManifest(raw: unknown): Manifest {
     check(typeof m[k] === 'number' && m[k] > 0, `manifest.${k} must be a positive number`)
   }
   for (const k of ['first_month', 'last_month', 'nrt_from'] as const) {
-    check(YM.test(String(m[k])), `manifest.${k} must be YYYY-MM`)
+    check(isYm(m[k]), `manifest.${k} must be YYYY-MM`)
   }
+  check(m.first_month <= m.last_month, 'manifest.first_month must not be after manifest.last_month')
+  check(typeof m.month_to_date === 'boolean', 'manifest.month_to_date must be true or false')
   check(Array.isArray(m.baseline_years) && m.baseline_years.length === 2, 'manifest.baseline_years must be [first, last]')
-  check(Array.isArray(m.harmonized_coverage) && m.harmonized_coverage.length === 2, 'manifest.harmonized_coverage must be [first, last]')
+  check(Array.isArray(m.harmonized_coverage) && m.harmonized_coverage.length === 2 && m.harmonized_coverage.every(isYm),
+    'manifest.harmonized_coverage must be [first, last] as YYYY-MM')
   for (const k of ['sensors', 'coverage', 'tiles', 'presets'] as const) {
     check(Array.isArray(m[k]), `manifest.${k} must be a list`)
   }
+  m.sensors.forEach((s, i) => check(s && typeof s.key === 'string' && isYm(s.first_month) && isYm(s.last_month),
+    `manifest.sensors[${i}] needs key, first_month and last_month (YYYY-MM)`))
   return m
 }
 
@@ -688,11 +707,15 @@ export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetc
     overview(): Promise<OverviewFile> {
       return getJson<OverviewFile>('overview.json')
     },
-    /** Optional file. Missing (404, or the dev server's HTML fallback) means "no reported data". */
+    /** Optional file. Missing (404, the dev server's HTML fallback) or unreadable means "no reported data". */
     async reported(): Promise<ReportedFile | null> {
-      const res = await fetchFn(baseUrl + 'reported.json')
-      if (!res.ok || !isJson(res)) return null
-      return (await res.json()) as ReportedFile
+      try {
+        const res = await fetchFn(baseUrl + 'reported.json')
+        if (!res.ok || !isJson(res)) return null
+        return (await res.json()) as ReportedFile
+      } catch {
+        return null
+      }
     },
   }
 }
@@ -703,7 +726,7 @@ export type DataSource = ReturnType<typeof createDataSource>
 - [ ] **Step 6: Run it to see it pass**
 
 Run: `npx vitest run src/lib/data.test.ts`
-Expected: `Tests  4 passed (4)`
+Expected: `Tests  5 passed (5)`
 
 - [ ] **Step 7: Commit**
 
@@ -804,6 +827,12 @@ describe('aggregate', () => {
     expect(sel.fallback).toBe(true)
     expect(sel.cells.map((c) => c.id)).toEqual(['92_182'])
   })
+  it('falls back for a thin strip that contains no cell centre', () => {
+    // 0.3 x 5 degrees: bigger than one cell, but between the cell centres at 0.5 and 1.5 degrees east
+    const sel = selectCells(areaFromBbox([0.6, -2, 0.9, 3]), [tile], 1)
+    expect(sel.fallback).toBe(true)
+    expect(sel.cells.map((c) => c.id)).toEqual(['90_180'])
+  })
   it('totals each cell over a month range', () => {
     const sel = selectCells(areaFromBbox([0, 0, 3, 3]), [tile], 1)
     expect(cellTotals(sel, 'viirs_snpp', 0, 2).map((c) => c.total)).toEqual([8, 18])
@@ -813,6 +842,10 @@ describe('aggregate', () => {
     expect(coverageOf(manifest, areaFromBbox([1, 1, 2, 2]))).toBe('full')
     expect(coverageOf(manifest, areaFromBbox([8, 8, 12, 12]))).toBe('partial')
     expect(coverageOf(manifest, areaFromBbox([20, 20, 22, 22]))).toBe('none')
+  })
+  it('counts an area across two adjacent coverage boxes as fully covered', () => {
+    const two = { ...manifest, coverage: [[0, 0, 10, 10], [10, 0, 20, 10]] } as unknown as Manifest
+    expect(coverageOf(two, areaFromBbox([5, 1, 15, 2]))).toBe('full')
   })
 })
 ```
@@ -959,7 +992,7 @@ export interface CellRef {
 
 export interface Selection {
   cells: CellRef[]
-  /** true when the area is smaller than one grid cell and we used the cell containing its centre. */
+  /** true when no grid-cell centre lies inside the area, so we used the cell containing its centre. */
   fallback: boolean
 }
 
@@ -970,7 +1003,22 @@ export interface AreaSeries {
   high: (number | null)[] | null
 }
 
-const KM_PER_DEG = 111.32
+/** Does any grid-cell centre lie inside the area? (Sparse tiles can't tell us: absent cells are zeros.) */
+function containsCellCentre(area: Area, feature: GeoJSON.Feature<GeoJSON.Polygon>, gridDeg: number): boolean {
+  const [w, s, e, n] = area.bbox
+  const r0 = Math.ceil((s + 90) / gridDeg - 0.5)
+  const r1 = Math.floor((n + 90) / gridDeg - 0.5)
+  const c0 = Math.ceil((w + 180) / gridDeg - 0.5)
+  const c1 = Math.floor((e + 180) / gridDeg - 0.5)
+  if (r1 < r0 || c1 < c0) return false
+  if ((r1 - r0 + 1) * (c1 - c0 + 1) > 20_000) return true // very large areas always contain one
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      if (booleanPointInPolygon([(c + 0.5) * gridDeg - 180, (r + 0.5) * gridDeg - 90], feature)) return true
+    }
+  }
+  return false
+}
 
 export function selectCells(area: Area, tiles: TileFile[], gridDeg: number): Selection {
   const [w, s, e, n] = area.bbox
@@ -983,10 +1031,9 @@ export function selectCells(area: Area, tiles: TileFile[], gridDeg: number): Sel
       if (booleanPointInPolygon([c.lon, c.lat], feature)) cells.push({ tile, index, id, ...c })
     })
   }
-  const midLat = (s + n) / 2
-  const cellKm2 = (gridDeg * KM_PER_DEG) ** 2 * Math.cos((midLat * Math.PI) / 180)
-  if (cells.length > 0 || area.areaKm2 >= cellKm2) return { cells, fallback: false }
-  const id = cellId(midLat, (w + e) / 2, gridDeg)
+  if (cells.length > 0 || containsCellCentre(area, feature, gridDeg)) return { cells, fallback: false }
+  // Small or thin areas: use the cell that contains the area's centre.
+  const id = cellId((s + n) / 2, (w + e) / 2, gridDeg)
   for (const tile of tiles) {
     const index = tile.cells.indexOf(id)
     if (index >= 0) return { cells: [{ tile, index, id, ...cellCentre(id, gridDeg) }], fallback: true }
@@ -1038,22 +1085,34 @@ export function cellTotals(sel: Selection, key: SeriesKey, i0: number, i1: numbe
   })
 }
 
-/** Does the area overlap the processed coverage at all, and is all of it inside? */
+/**
+ * Is the area inside the processed coverage? Checks the area's corners and a grid of points inside it,
+ * so an area spanning two adjacent coverage boxes counts as fully covered.
+ */
 export function coverageOf(m: Manifest, area: Area): 'none' | 'partial' | 'full' {
   const [w, s, e, n] = area.bbox
-  let any = false
-  for (const [cw, cs, ce, cn] of m.coverage) {
-    if (w >= cw && e <= ce && s >= cs && n <= cn) return 'full'
-    if (w < ce && e > cw && s < cn && n > cs) any = true
+  const covered = ([lon, lat]: number[]) => m.coverage.some(([cw, cs, ce, cn]) => lon >= cw && lon <= ce && lat >= cs && lat <= cn)
+  const feature: GeoJSON.Feature<GeoJSON.Polygon> = { type: 'Feature', properties: {}, geometry: area.geometry }
+  const points: number[][] = [...area.geometry.coordinates[0]]
+  const N = 10
+  for (let i = 0; i <= N; i++) {
+    for (let j = 0; j <= N; j++) {
+      const p = [w + ((e - w) * i) / N, s + ((n - s) * j) / N]
+      if (booleanPointInPolygon(p, feature)) points.push(p)
+    }
   }
-  return any ? 'partial' : 'none'
+  const hits = points.filter(covered).length
+  if (hits === points.length) return 'full'
+  if (hits > 0) return 'partial'
+  // A small coverage box can sit between sample points.
+  return m.coverage.some(([cw, cs, ce, cn]) => w < ce && e > cw && s < cn && n > cs) ? 'partial' : 'none'
 }
 ```
 
 - [ ] **Step 4: Run them to see them pass**
 
 Run: `npx vitest run src/lib/area.test.ts src/lib/aggregate.test.ts`
-Expected: `Tests  9 passed (9)`
+Expected: `Tests  11 passed (11)`
 
 - [ ] **Step 5: Commit**
 
@@ -1120,6 +1179,13 @@ describe('indices', () => {
     const i = months.indexOf('2006-08')
     const a = monthlyAnomalies(series, months, i, i, [2003, 2006])
     expect(a).toEqual([{ month: '2006-08', value: 40, reference: 20, anomalyPct: 100 }])
+  })
+  it('leaves year to date empty when the year is missing early months', () => {
+    // The record starts in November 2000, so Jan-Dec 2000 is incomplete
+    const m2 = monthRange('2000-11', '2006-12')
+    const flat = m2.map(() => 10)
+    expect(yearToDate(flat, m2, '2000-12', [2000, 2006])).toBeNull()
+    expect(yearToDate(flat, m2, '2006-12', [2000, 2006])).toEqual({ current: 120, typical: 120, anomalyPct: 0, years: 5 })
   })
 })
 ```
@@ -1271,22 +1337,34 @@ export interface YearToDate {
   years: number
 }
 
-/** January to the focus month of the focus year, against the median of the same span in baseline years. */
+/**
+ * January to the focus month of the focus year, against the median of the same span in baseline years.
+ * A year counts only when every month from January to the focus month exists and has a value,
+ * so a record that starts in November is never compared with full years.
+ */
 export function yearToDate(series: Series, months: YearMonth[], focus: YearMonth, [y0, y1]: [number, number]): YearToDate | null {
   const { year: fy, month: fm } = parseYm(focus)
-  const sums = new Map<number, number | null>()
+  const acc = new Map<number, { sum: number; n: number; gap: boolean }>()
   months.forEach((ym, i) => {
     const { year, month } = parseYm(ym)
     if (month > fm) return
-    const prev = sums.has(year) ? sums.get(year)! : 0
+    const a = acc.get(year) ?? { sum: 0, n: 0, gap: false }
     const v = series[i]
-    sums.set(year, prev === null || v === null ? null : prev + v)
+    if (v === null) a.gap = true
+    else a.sum += v
+    a.n++
+    acc.set(year, a)
   })
-  const current = sums.get(fy)
-  if (current === null || current === undefined) return null
-  const base = [...sums.entries()]
-    .filter(([y, v]) => y >= y0 && y <= y1 && y !== fy && v !== null)
-    .map(([, v]) => v as number)
+  const complete = (y: number): number | null => {
+    const a = acc.get(y)
+    return a && !a.gap && a.n === fm ? a.sum : null
+  }
+  const current = complete(fy)
+  if (current === null) return null
+  const base = [...acc.keys()]
+    .filter((y) => y >= y0 && y <= y1 && y !== fy)
+    .map(complete)
+    .filter((v): v is number => v !== null)
   if (base.length < MIN_BASELINE_YEARS) return null
   const typical = quantile([...base].sort((a, b) => a - b), 0.5)
   return { current, typical, anomalyPct: relativeAnomaly(current, typical), years: base.length }
@@ -1321,7 +1399,7 @@ export function monthlyAnomalies(
 - [ ] **Step 4: Run it to see it pass**
 
 Run: `npx vitest run src/lib/indices.test.ts`
-Expected: `Tests  7 passed (7)`
+Expected: `Tests  8 passed (8)`
 
 - [ ] **Step 5: Commit**
 
@@ -1361,6 +1439,12 @@ describe('buildCountScale', () => {
     expect(s.edges).toEqual([5])
     expect(s.labels).toEqual(['5 to 5'])
   })
+  it('falls back to log bins when ties collapse the quantile bins', () => {
+    const skewed = [...Array(99).fill(1), 1000]
+    const s = buildCountScale(skewed, { method: 'quantile', bins: 7, palette: 'inferno' })
+    expect(s.edges.length).toBeGreaterThan(2)
+    expect(s.colorOf(1)).not.toBe(s.colorOf(1000))
+  })
   it('makes log bins with round numbers', () => {
     const s = buildCountScale([1, 1000], { method: 'log', bins: 3, palette: 'inferno' })
     expect(s.edges).toEqual([1, 10, 100])
@@ -1371,8 +1455,10 @@ describe('anomaly colours', () => {
   it('bins symmetric percentages', () => {
     expect(anomalyBin(-80)).toBe(0)
     expect(anomalyBin(0)).toBe(3)
-    expect(anomalyBin(10)).toBe(3)
-    expect(anomalyBin(12)).toBe(4)
+    expect([anomalyBin(-10), anomalyBin(10)]).toEqual([3, 3])
+    expect([anomalyBin(-25), anomalyBin(25)]).toEqual([2, 4])
+    expect([anomalyBin(-50), anomalyBin(50)]).toEqual([1, 5])
+    expect([anomalyBin(-51), anomalyBin(51)]).toEqual([0, 6])
     expect(anomalyBin(300)).toBe(6)
     expect(anomalyColor(null)).toBe(NO_DATA_FILL)
   })
@@ -1434,16 +1520,20 @@ export function buildCountScale(
   const pos = values.filter((v): v is number => v !== null && v > 0).sort((a, b) => a - b)
   const min = pos[0] ?? 1
   const max = pos[pos.length - 1] ?? 1
+  const make = (method: RampMethod) => {
+    const t: number[] = []
+    for (let k = 1; k < opts.bins; k++) {
+      t.push(method === 'quantile' ? quantile(pos, k / opts.bins) : nice(min * (max / min) ** (k / opts.bins)))
+    }
+    return [...new Set(t.map((x) => Math.round(x * 10) / 10))].filter((x) => x > min && x <= max)
+  }
   let thresholds: number[] = []
   if (pos.length > 1) {
-    for (let k = 1; k < opts.bins; k++) {
-      thresholds.push(
-        opts.method === 'quantile'
-          ? quantile(pos, k / opts.bins)
-          : nice(min * (max / min) ** (k / opts.bins)),
-      )
-    }
-    thresholds = [...new Set(thresholds.map((t) => Math.round(t * 10) / 10))].filter((t) => t > min && t <= max)
+    thresholds = make(opts.method)
+    // Many tied low counts (lots of 1s and 2s) collapse quantile bins, so 2 and 1000 would share a colour.
+    // Then log bins keep the high values apart.
+    const distinct = new Set(pos).size
+    if (opts.method === 'quantile' && thresholds.length + 1 < Math.min(opts.bins, distinct)) thresholds = make('log')
   }
   const edges = [min, ...thresholds]
   const interp = PALETTES[opts.palette].interpolate
@@ -1461,21 +1551,19 @@ export function buildCountScale(
   }
 }
 
-/** Anomaly bins in percent. Blue = fewer hotspots than usual, red = more (never red-green). */
-export const ANOMALY_EDGES = [-50, -25, -10, 10, 25, 50]
+/** Anomaly bins in percent, symmetric around 0. Blue = fewer hotspots than usual, red = more (never red-green). */
 const ANOMALY_T = [0.92, 0.78, 0.64, 0.5, 0.36, 0.22, 0.08]
 export const ANOMALY_COLORS = ANOMALY_T.map((t) => interpolateRdBu(t))
 export const ANOMALY_LABELS = [
-  '50% or more below', '25 to 50% below', '10 to 25% below', 'Within 10%',
-  '10 to 25% above', '25 to 50% above', '50% or more above',
+  'More than 50% below', '25 to 50% below', '10 to 25% below', 'Within 10%',
+  '10 to 25% above', '25 to 50% above', 'More than 50% above',
 ]
 
+/** 0..6: |pct| up to 10 is bin 3; up to 25, up to 50, and beyond step outwards on each side. */
 export function anomalyBin(pct: number): number {
-  let i = 0
-  while (i < ANOMALY_EDGES.length && pct >= ANOMALY_EDGES[i]) i++
-  // pct exactly 10 belongs to "within 10%"; pct exactly -10 too
-  if (i === 4 && pct === 10) return 3
-  return i
+  const a = Math.abs(pct)
+  const step = a <= 10 ? 0 : a <= 25 ? 1 : a <= 50 ? 2 : 3
+  return pct < 0 ? 3 - step : 3 + step
 }
 
 export function anomalyColor(pct: number | null): string {
@@ -1547,7 +1635,7 @@ export function areaToFeatures(geometry: GeoJSON.Polygon | null): GeoJSON.Featur
 - [ ] **Step 4: Run it to see it pass**
 
 Run: `npx vitest run src/lib/colorScale.test.ts`
-Expected: `Tests  5 passed (5)`
+Expected: `Tests  6 passed (6)`
 
 - [ ] **Step 5: Commit**
 
@@ -1943,7 +2031,7 @@ Expected: `Build stopped: dataset "_mock" is MOCK DATA. …` then `exit 1`
 - [ ] **Step 6: Run every engine test**
 
 Run: `npm test`
-Expected: `Tests  36 passed (36)`
+Expected: `Tests  41 passed (41)`
 
 - [ ] **Step 7: Commit**
 
@@ -1953,7 +2041,7 @@ git commit -m "demo: deterministic mock data generator and no-mock build guard"
 ```
 
 #### ✅ CHECKPOINT 1: Engine. Stop and review with Aziz
-- `npm test`: 36 pass. `npm run check-data`: exit 1 on mock data.
+- `npm test`: 41 pass. `npm run check-data`: exit 1 on mock data.
 - Open `public/data/_mock/manifest.json` together: is the tiled contract (section 2.3) acceptable to send to Andre and Pierre?
 - Review `src/config.ts` values (TO CONFIRM 3).
 - Add a row to `docs/AI_USE.md` (date, files, "engine generated with Claude from the plan").
@@ -2855,7 +2943,7 @@ export function AreaSummary({ area, data, gridDeg }: { area: Area | null; data: 
       {data.status === 'error' && <p className="error">Could not load data: {data.error}</p>}
       {data.coverage === 'none' && <p className="notice">No data is loaded for this area yet. This is not the same as "no fires".</p>}
       {data.coverage === 'partial' && <p className="notice">Part of this area is outside the loaded data, so totals may be too low.</p>}
-      {data.selection?.fallback && <p className="notice">This area is smaller than one grid cell, so we show the {gridDeg}° cell that contains its centre.</p>}
+      {data.selection?.fallback && <p className="notice">No {gridDeg}° grid-cell centre lies inside this area, so we show the cell that contains its centre.</p>}
     </div>
   )
 }
@@ -2962,7 +3050,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 - [ ] **Step 2: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: no tsc output; `Tests  43 passed (43)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
+Expected: no tsc output; `Tests  48 passed (48)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
 
 - [ ] **Step 3: Run it and check by hand**
 
@@ -3544,7 +3632,7 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck and test**
 
 Run: `npx tsc -b && npm test`
-Expected: `Tests  49 passed (49)`
+Expected: `Tests  54 passed (54)`
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] The calendar shows years 2000 to 2026. Nov 2026 has a yellow outline (month to date). Jul to Oct 2026 have dotted borders (NRT). Nov 2000 to Feb 2001 for "VIIRS S-NPP only" are hatched.
@@ -4400,7 +4488,7 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: `Tests  54 passed (54)`; oxlint shows warnings only.
+Expected: `Tests  59 passed (59)`; oxlint shows warnings only.
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
 - [ ] Summary cards show "October 2026 (Near real-time: provisional)", a verdict word with its percentile, the anomaly vs average and median, year to date, rank, and a caption naming 2003 to 2025 and the sensors.
@@ -4684,7 +4772,7 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 - [ ] Open the URL in a private window and on a phone.
 
 #### ✅ CHECKPOINT 5: Ready to publish. Stop and review with Aziz
-`npm test` (54), `npm run test:e2e` (17), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
+`npm test` (59), `npm run test:e2e` (17), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
 
 ---
 
