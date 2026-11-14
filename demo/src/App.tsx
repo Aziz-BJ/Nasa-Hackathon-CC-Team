@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // Checkpoint 2 version: globe, area selection and area summary. Replaced at checkpoints 3 and 4.
-import { useMemo, useReducer } from 'react'
+import { useMemo, useReducer, useState } from 'react'
 import { AboutPage } from './components/AboutPage'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
@@ -14,7 +14,7 @@ import { dataSource } from './dataSource'
 import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
-import { areaFromPreset } from './lib/area'
+import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
 import { labelYm } from './lib/months'
@@ -34,6 +34,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
     return mm.presets[0] ? { ...init, area: areaFromPreset(mm.presets[0]) } : init
   })
   const data = useAreaData(dataSource, m, s.area)
+  const [drawError, setDrawError] = useState<string | null>(null)
   const series = data.series
   const i0 = series ? series.months.indexOf(s.from) : -1
   const i1 = series ? series.months.indexOf(s.to) : -1
@@ -48,20 +49,24 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
 
   return (
     <div className="app">
-      <a href="#results" className="skip-link">Skip to results</a>
+      <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
       <Header view={s.view} onView={(view) => dispatch({ type: 'setView', view })} />
       {s.view === 'about' ? <AboutPage manifest={m} /> : (
         <main className="explore" id="main">
           <aside className="controls" aria-label="Choose an area and months">
-            <AreaPanel presets={m.presets} area={s.area} tool={s.tool}
+            <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
               onTool={(tool) => dispatch({ type: 'setTool', tool })}
-              onArea={(area) => dispatch({ type: 'setArea', area })} />
+              onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
           </aside>
           <section className="map-col" aria-label="Map">
             <div className="globe-wrap">
               <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-                onDrawn={(area) => dispatch({ type: 'setArea', area })} />
+                onDrawn={(area) => {
+                  const err = validateDrawn(area)
+                  setDrawError(err)
+                  dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+                }} />
             </div>
             {mapScale && <Legend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} to ${labelYm(s.to)} (bins fit these months)`} />}
             <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />

@@ -28,9 +28,11 @@ export interface AreaPanelProps {
   tool: DrawTool
   onTool: (t: DrawTool) => void
   onArea: (a: Area) => void
+  /** Why the last drawn shape was rejected, if it was. */
+  error?: string | null
 }
 
-export function AreaPanel({ presets, area, tool, onTool, onArea }: AreaPanelProps) {
+export function AreaPanel({ presets, area, tool, onTool, onArea, error }: AreaPanelProps) {
   const presetValue = area?.source === 'preset' ? area.presetId ?? '' : ''
   return (
     <fieldset>
@@ -54,6 +56,7 @@ export function AreaPanel({ presets, area, tool, onTool, onArea }: AreaPanelProp
         ))}
       </div>
       <p className="small muted" aria-live="polite">{HELP[tool]}</p>
+      {error && <p className="error small" role="alert">{error}</p>}
       <details>
         <summary>Or type coordinates</summary>
         <CoordinateForm onArea={onArea} />

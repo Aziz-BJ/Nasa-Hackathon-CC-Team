@@ -65,6 +65,14 @@ export function areaFromPolygon(geometry: GeoJSON.Polygon, label = 'Drawn area')
   return finish(geometry, label, 'drawn')
 }
 
+/** Drawn shapes follow the same rules as typed ones: no 180° crossing, and the size limit. */
+export function validateDrawn(a: Area): string | null {
+  const ring = a.geometry.coordinates[0]
+  const crosses = ring.some(([lon], i) => Math.abs(lon) > 180 || (i > 0 && Math.abs(lon - ring[i - 1][0]) > 180))
+  if (crosses) return 'This shape crosses the 180° line, which is not supported yet. Draw it on one side of the line.'
+  return checkSize(a)
+}
+
 export function areaFromPreset(p: { id: string; name: string; bbox: Bbox }): Area {
   return { ...areaFromBbox(p.bbox, p.name, 'preset'), presetId: p.id }
 }

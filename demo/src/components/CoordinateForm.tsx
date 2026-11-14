@@ -39,10 +39,11 @@ export function CoordinateForm({ onArea }: { onArea: (a: Area) => void }) {
 
   return (
     <form onSubmit={submit} noValidate aria-label="Enter coordinates">
-      <div role="radiogroup" aria-label="Coordinate type" className="tools">
-        <button type="button" className="btn" role="radio" aria-checked={mode === 'bbox'} aria-pressed={mode === 'bbox'} onClick={() => setMode('bbox')}>Box</button>
-        <button type="button" className="btn" role="radio" aria-checked={mode === 'point'} aria-pressed={mode === 'point'} onClick={() => setMode('point')}>Point + radius</button>
-      </div>
+      <fieldset>
+        <legend className="small">Coordinate type</legend>
+        <label><input type="radio" name="coord-mode" checked={mode === 'bbox'} onChange={() => setMode('bbox')} /> Box</label>
+        <label><input type="radio" name="coord-mode" checked={mode === 'point'} onChange={() => setMode('point')} /> Point + radius</label>
+      </fieldset>
       <p id="coord-hint" className="small muted">Decimal degrees. Latitude −90 to 90, longitude −180 to 180.</p>
       {mode === 'bbox' ? (
         <div className="row">

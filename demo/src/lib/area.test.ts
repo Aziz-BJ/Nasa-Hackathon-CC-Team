@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
-import { areaFromBbox, areaFromPoint, checkSize, validateBbox, validatePoint } from './area'
+import { areaFromBbox, areaFromPoint, areaFromPolygon, checkSize, validateBbox, validateDrawn, validatePoint } from './area'
 
 describe('area', () => {
   it('validates boxes in west, south, east, north order', () => {
@@ -25,5 +25,12 @@ describe('area', () => {
   })
   it('rejects areas over the size limit', () => {
     expect(checkSize(areaFromBbox([-180, -60, 180, 80]))).toMatch(/limit/)
+  })
+  it('applies the typed-coordinate rules to drawn shapes', () => {
+    const ring = (lons: number[]) => areaFromPolygon({ type: 'Polygon', coordinates: [[[lons[0], 60], [lons[1], 60], [lons[1], 65], [lons[0], 65], [lons[0], 60]]] })
+    expect(validateDrawn(ring([175, -175]))).toMatch(/180° line/) // wraps from +175 to -175
+    expect(validateDrawn(ring([170, 190]))).toMatch(/180° line/) // longitudes past 180
+    expect(validateDrawn(areaFromBbox([-60, -50, 60, 50]))).toMatch(/limit/)
+    expect(validateDrawn(areaFromBbox([0, 0, 1, 1]))).toBeNull()
   })
 })
