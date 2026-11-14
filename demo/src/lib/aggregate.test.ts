@@ -49,6 +49,12 @@ describe('aggregate', () => {
     expect(sel.fallback).toBe(true)
     expect(sel.cells.map((c) => c.id)).toEqual(['92_182'])
   })
+  it('falls back for a thin strip that contains no cell centre', () => {
+    // 0.3 x 5 degrees: bigger than one cell, but between the cell centres at 0.5 and 1.5 degrees east
+    const sel = selectCells(areaFromBbox([0.6, -2, 0.9, 3]), [tile], 1)
+    expect(sel.fallback).toBe(true)
+    expect(sel.cells.map((c) => c.id)).toEqual(['90_180'])
+  })
   it('totals each cell over a month range', () => {
     const sel = selectCells(areaFromBbox([0, 0, 3, 3]), [tile], 1)
     expect(cellTotals(sel, 'viirs_snpp', 0, 2).map((c) => c.total)).toEqual([8, 18])
@@ -58,5 +64,9 @@ describe('aggregate', () => {
     expect(coverageOf(manifest, areaFromBbox([1, 1, 2, 2]))).toBe('full')
     expect(coverageOf(manifest, areaFromBbox([8, 8, 12, 12]))).toBe('partial')
     expect(coverageOf(manifest, areaFromBbox([20, 20, 22, 22]))).toBe('none')
+  })
+  it('counts an area across two adjacent coverage boxes as fully covered', () => {
+    const two = { ...manifest, coverage: [[0, 0, 10, 10], [10, 0, 20, 10]] } as unknown as Manifest
+    expect(coverageOf(two, areaFromBbox([5, 1, 15, 2]))).toBe('full')
   })
 })

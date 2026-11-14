@@ -137,22 +137,34 @@ export interface YearToDate {
   years: number
 }
 
-/** January to the focus month of the focus year, against the median of the same span in baseline years. */
+/**
+ * January to the focus month of the focus year, against the median of the same span in baseline years.
+ * A year counts only when every month from January to the focus month exists and has a value,
+ * so a record that starts in November is never compared with full years.
+ */
 export function yearToDate(series: Series, months: YearMonth[], focus: YearMonth, [y0, y1]: [number, number]): YearToDate | null {
   const { year: fy, month: fm } = parseYm(focus)
-  const sums = new Map<number, number | null>()
+  const acc = new Map<number, { sum: number; n: number; gap: boolean }>()
   months.forEach((ym, i) => {
     const { year, month } = parseYm(ym)
     if (month > fm) return
-    const prev = sums.has(year) ? sums.get(year)! : 0
+    const a = acc.get(year) ?? { sum: 0, n: 0, gap: false }
     const v = series[i]
-    sums.set(year, prev === null || v === null ? null : prev + v)
+    if (v === null) a.gap = true
+    else a.sum += v
+    a.n++
+    acc.set(year, a)
   })
-  const current = sums.get(fy)
-  if (current === null || current === undefined) return null
-  const base = [...sums.entries()]
-    .filter(([y, v]) => y >= y0 && y <= y1 && y !== fy && v !== null)
-    .map(([, v]) => v as number)
+  const complete = (y: number): number | null => {
+    const a = acc.get(y)
+    return a && !a.gap && a.n === fm ? a.sum : null
+  }
+  const current = complete(fy)
+  if (current === null) return null
+  const base = [...acc.keys()]
+    .filter((y) => y >= y0 && y <= y1 && y !== fy)
+    .map(complete)
+    .filter((v): v is number => v !== null)
   if (base.length < MIN_BASELINE_YEARS) return null
   const typical = quantile([...base].sort((a, b) => a - b), 0.5)
   return { current, typical, anomalyPct: relativeAnomaly(current, typical), years: base.length }

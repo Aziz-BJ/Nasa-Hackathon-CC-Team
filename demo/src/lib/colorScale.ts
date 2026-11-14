@@ -44,16 +44,20 @@ export function buildCountScale(
   const pos = values.filter((v): v is number => v !== null && v > 0).sort((a, b) => a - b)
   const min = pos[0] ?? 1
   const max = pos[pos.length - 1] ?? 1
+  const make = (method: RampMethod) => {
+    const t: number[] = []
+    for (let k = 1; k < opts.bins; k++) {
+      t.push(method === 'quantile' ? quantile(pos, k / opts.bins) : nice(min * (max / min) ** (k / opts.bins)))
+    }
+    return [...new Set(t.map((x) => Math.round(x * 10) / 10))].filter((x) => x > min && x <= max)
+  }
   let thresholds: number[] = []
   if (pos.length > 1) {
-    for (let k = 1; k < opts.bins; k++) {
-      thresholds.push(
-        opts.method === 'quantile'
-          ? quantile(pos, k / opts.bins)
-          : nice(min * (max / min) ** (k / opts.bins)),
-      )
-    }
-    thresholds = [...new Set(thresholds.map((t) => Math.round(t * 10) / 10))].filter((t) => t > min && t <= max)
+    thresholds = make(opts.method)
+    // Many tied low counts (lots of 1s and 2s) collapse quantile bins, so 2 and 1000 would share a colour.
+    // Then log bins keep the high values apart.
+    const distinct = new Set(pos).size
+    if (opts.method === 'quantile' && thresholds.length + 1 < Math.min(opts.bins, distinct)) thresholds = make('log')
   }
   const edges = [min, ...thresholds]
   const interp = PALETTES[opts.palette].interpolate
@@ -71,21 +75,19 @@ export function buildCountScale(
   }
 }
 
-/** Anomaly bins in percent. Blue = fewer hotspots than usual, red = more (never red-green). */
-export const ANOMALY_EDGES = [-50, -25, -10, 10, 25, 50]
+/** Anomaly bins in percent, symmetric around 0. Blue = fewer hotspots than usual, red = more (never red-green). */
 const ANOMALY_T = [0.92, 0.78, 0.64, 0.5, 0.36, 0.22, 0.08]
 export const ANOMALY_COLORS = ANOMALY_T.map((t) => interpolateRdBu(t))
 export const ANOMALY_LABELS = [
-  '50% or more below', '25 to 50% below', '10 to 25% below', 'Within 10%',
-  '10 to 25% above', '25 to 50% above', '50% or more above',
+  'More than 50% below', '25 to 50% below', '10 to 25% below', 'Within 10%',
+  '10 to 25% above', '25 to 50% above', 'More than 50% above',
 ]
 
+/** 0..6: |pct| up to 10 is bin 3; up to 25, up to 50, and beyond step outwards on each side. */
 export function anomalyBin(pct: number): number {
-  let i = 0
-  while (i < ANOMALY_EDGES.length && pct >= ANOMALY_EDGES[i]) i++
-  // pct exactly 10 belongs to "within 10%"; pct exactly -10 too
-  if (i === 4 && pct === 10) return 3
-  return i
+  const a = Math.abs(pct)
+  const step = a <= 10 ? 0 : a <= 25 ? 1 : a <= 50 ? 2 : 3
+  return pct < 0 ? 3 - step : 3 + step
 }
 
 export function anomalyColor(pct: number | null): string {

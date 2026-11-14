@@ -50,4 +50,11 @@ describe('indices', () => {
     const a = monthlyAnomalies(series, months, i, i, [2003, 2006])
     expect(a).toEqual([{ month: '2006-08', value: 40, reference: 20, anomalyPct: 100 }])
   })
+  it('leaves year to date empty when the year is missing early months', () => {
+    // The record starts in November 2000, so Jan-Dec 2000 is incomplete
+    const m2 = monthRange('2000-11', '2006-12')
+    const flat = m2.map(() => 10)
+    expect(yearToDate(flat, m2, '2000-12', [2000, 2006])).toBeNull()
+    expect(yearToDate(flat, m2, '2006-12', [2000, 2006])).toEqual({ current: 120, typical: 120, anomalyPct: 0, years: 5 })
+  })
 })

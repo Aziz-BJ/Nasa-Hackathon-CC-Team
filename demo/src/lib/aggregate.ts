@@ -18,7 +18,7 @@ export interface CellRef {
 
 export interface Selection {
   cells: CellRef[]
-  /** true when the area is smaller than one grid cell and we used the cell containing its centre. */
+  /** true when no grid-cell centre lies inside the area, so we used the cell containing its centre. */
   fallback: boolean
 }
 
@@ -29,7 +29,22 @@ export interface AreaSeries {
   high: (number | null)[] | null
 }
 
-const KM_PER_DEG = 111.32
+/** Does any grid-cell centre lie inside the area? (Sparse tiles can't tell us: absent cells are zeros.) */
+function containsCellCentre(area: Area, feature: GeoJSON.Feature<GeoJSON.Polygon>, gridDeg: number): boolean {
+  const [w, s, e, n] = area.bbox
+  const r0 = Math.ceil((s + 90) / gridDeg - 0.5)
+  const r1 = Math.floor((n + 90) / gridDeg - 0.5)
+  const c0 = Math.ceil((w + 180) / gridDeg - 0.5)
+  const c1 = Math.floor((e + 180) / gridDeg - 0.5)
+  if (r1 < r0 || c1 < c0) return false
+  if ((r1 - r0 + 1) * (c1 - c0 + 1) > 20_000) return true // very large areas always contain one
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      if (booleanPointInPolygon([(c + 0.5) * gridDeg - 180, (r + 0.5) * gridDeg - 90], feature)) return true
+    }
+  }
+  return false
+}
 
 export function selectCells(area: Area, tiles: TileFile[], gridDeg: number): Selection {
   const [w, s, e, n] = area.bbox
@@ -42,10 +57,9 @@ export function selectCells(area: Area, tiles: TileFile[], gridDeg: number): Sel
       if (booleanPointInPolygon([c.lon, c.lat], feature)) cells.push({ tile, index, id, ...c })
     })
   }
-  const midLat = (s + n) / 2
-  const cellKm2 = (gridDeg * KM_PER_DEG) ** 2 * Math.cos((midLat * Math.PI) / 180)
-  if (cells.length > 0 || area.areaKm2 >= cellKm2) return { cells, fallback: false }
-  const id = cellId(midLat, (w + e) / 2, gridDeg)
+  if (cells.length > 0 || containsCellCentre(area, feature, gridDeg)) return { cells, fallback: false }
+  // Small or thin areas: use the cell that contains the area's centre.
+  const id = cellId((s + n) / 2, (w + e) / 2, gridDeg)
   for (const tile of tiles) {
     const index = tile.cells.indexOf(id)
     if (index >= 0) return { cells: [{ tile, index, id, ...cellCentre(id, gridDeg) }], fallback: true }
@@ -97,13 +111,25 @@ export function cellTotals(sel: Selection, key: SeriesKey, i0: number, i1: numbe
   })
 }
 
-/** Does the area overlap the processed coverage at all, and is all of it inside? */
+/**
+ * Is the area inside the processed coverage? Checks the area's corners and a grid of points inside it,
+ * so an area spanning two adjacent coverage boxes counts as fully covered.
+ */
 export function coverageOf(m: Manifest, area: Area): 'none' | 'partial' | 'full' {
   const [w, s, e, n] = area.bbox
-  let any = false
-  for (const [cw, cs, ce, cn] of m.coverage) {
-    if (w >= cw && e <= ce && s >= cs && n <= cn) return 'full'
-    if (w < ce && e > cw && s < cn && n > cs) any = true
+  const covered = ([lon, lat]: number[]) => m.coverage.some(([cw, cs, ce, cn]) => lon >= cw && lon <= ce && lat >= cs && lat <= cn)
+  const feature: GeoJSON.Feature<GeoJSON.Polygon> = { type: 'Feature', properties: {}, geometry: area.geometry }
+  const points: number[][] = [...area.geometry.coordinates[0]]
+  const N = 10
+  for (let i = 0; i <= N; i++) {
+    for (let j = 0; j <= N; j++) {
+      const p = [w + ((e - w) * i) / N, s + ((n - s) * j) / N]
+      if (booleanPointInPolygon(p, feature)) points.push(p)
+    }
   }
-  return any ? 'partial' : 'none'
+  const hits = points.filter(covered).length
+  if (hits === points.length) return 'full'
+  if (hits > 0) return 'partial'
+  // A small coverage box can sit between sample points.
+  return m.coverage.some(([cw, cs, ce, cn]) => w < ce && e > cw && s < cn && n > cs) ? 'partial' : 'none'
 }

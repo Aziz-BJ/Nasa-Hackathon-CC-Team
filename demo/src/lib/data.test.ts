@@ -18,6 +18,9 @@ describe('validateManifest', () => {
   })
   it('names the broken field', () => {
     expect(() => validateManifest({ ...minimal, nrt_from: '2026-7' })).toThrow(/nrt_from/)
+    expect(() => validateManifest({ ...minimal, last_month: '2026-13' })).toThrow(/last_month/)
+    expect(() => validateManifest({ ...minimal, first_month: '2027-01' })).toThrow(/first_month must not be after/)
+    expect(() => validateManifest({ ...minimal, sensors: [{ key: 'modis' }] })).toThrow(/sensors\[0\]/)
     expect(() => validateManifest({ ...minimal, schema_version: 2 })).toThrow(DataError)
   })
 })
@@ -38,5 +41,9 @@ describe('createDataSource', () => {
     const html = new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })
     expect(await createDataSource('/', async () => html).reported()).toBeNull()
     expect(await createDataSource('/', async () => new Response('', { status: 404 })).reported()).toBeNull()
+  })
+  it('treats an unreadable reported.json as absent', async () => {
+    const broken = new Response('{not json', { status: 200, headers: { 'content-type': 'application/json' } })
+    expect(await createDataSource('/', async () => broken).reported()).toBeNull()
   })
 })

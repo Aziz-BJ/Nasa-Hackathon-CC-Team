@@ -22,6 +22,12 @@ describe('buildCountScale', () => {
     expect(s.edges).toEqual([5])
     expect(s.labels).toEqual(['5 to 5'])
   })
+  it('falls back to log bins when ties collapse the quantile bins', () => {
+    const skewed = [...Array(99).fill(1), 1000]
+    const s = buildCountScale(skewed, { method: 'quantile', bins: 7, palette: 'inferno' })
+    expect(s.edges.length).toBeGreaterThan(2)
+    expect(s.colorOf(1)).not.toBe(s.colorOf(1000))
+  })
   it('makes log bins with round numbers', () => {
     const s = buildCountScale([1, 1000], { method: 'log', bins: 3, palette: 'inferno' })
     expect(s.edges).toEqual([1, 10, 100])
@@ -32,8 +38,10 @@ describe('anomaly colours', () => {
   it('bins symmetric percentages', () => {
     expect(anomalyBin(-80)).toBe(0)
     expect(anomalyBin(0)).toBe(3)
-    expect(anomalyBin(10)).toBe(3)
-    expect(anomalyBin(12)).toBe(4)
+    expect([anomalyBin(-10), anomalyBin(10)]).toEqual([3, 3])
+    expect([anomalyBin(-25), anomalyBin(25)]).toEqual([2, 4])
+    expect([anomalyBin(-50), anomalyBin(50)]).toEqual([1, 5])
+    expect([anomalyBin(-51), anomalyBin(51)]).toEqual([0, 6])
     expect(anomalyBin(300)).toBe(6)
     expect(anomalyColor(null)).toBe(NO_DATA_FILL)
   })
