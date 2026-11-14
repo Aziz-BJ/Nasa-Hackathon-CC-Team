@@ -6,7 +6,7 @@
 
 **Architecture:** Static React single-page app (no backend). The pipeline's output is read through one adapter (`src/lib/data.ts`) from 10° tile files, so any area drawn anywhere on the globe loads only the tiles it touches. All statistics are pure, unit-tested functions in `src/lib/`. UI components only display. A build guard stops a production build that would ship mock data.
 
-**Tech Stack:** Vite 8, React 19, TypeScript 7, MapLibre GL JS 6 (globe projection) with NASA GIBS imagery, Terra Draw 1.39 (drawing), Observable Plot 0.6 (charts), d3-scale-chromatic (accessible ramps), Turf 7 (geometry), Vitest 5 + Testing Library (unit), Playwright 1.65 + axe-core (end-to-end and accessibility).
+**Tech Stack:** Vite 8, React 19, TypeScript 7, MapLibre GL JS 6 (globe projection) with NASA GIBS imagery and OpenFreeMap labels, Terra Draw 1.39 (drawing), Observable Plot 0.6 (charts), d3-scale-chromatic (accessible ramps), Turf 7 (geometry), Vitest 5 + Testing Library (unit), Playwright 1.65 + axe-core (end-to-end and accessibility).
 
 ---
 
@@ -25,7 +25,7 @@
 - Commits made by Claude end with the `Co-Authored-By` line from the session instructions.
 
 **What was already proven on 14 Nov 2026 (throwaway spike).** Every code block below was typechecked with `tsc -b` (strict) and run:
-- 60 unit tests and 17 Playwright tests (desktop and phone, including axe accessibility) pass.
+- 66 unit tests and 19 Playwright tests (desktop and phone, including axe accessibility and the guide) pass.
 - MapLibre 6 globe + NASA GIBS Blue Marble tiles + Terra Draw circle drawing work in dev, in the production build, and in headless Chromium.
 - Pitfalls already solved, so don't "fix" them back:
   1. `maplibre-gl` 6 has **no default export**: use `import { Map } from 'maplibre-gl'`.
@@ -46,10 +46,11 @@
      - Drawn shapes follow the typed rules (`validateDrawn`): a shape crossing the 180° line is rejected instead of becoming a band around the globe, and the size limit applies.
      - The coordinate type switch uses native radio buttons (valid ARIA, arrow keys).
      - The skip link targets `#main`, which exists on both pages.
+  10. Redesigned after Aziz reviewed Checkpoint 2 (the first layout looked like a slide deck): map-first layout with Apple-style dark glass (sections 1 and 2.6). Drawers stay mounted and are `inert` while closed, so closed panels are invisible to tests and screen readers. The scrolling More info area is focusable so keyboard users can scroll it.
 - **Background browser tabs don't render WebGL.** If the globe looks blank while you test in a hidden pane or a background tab, bring the tab to the front before debugging.
 
 **TO CONFIRM (asks for the team, none of them block Checkpoints 1 to 5):**
-1. App name. "Hotspot Calendar" is a working title (`Header.tsx`, `index.html`).
+1. App name. "Hotspot Calendar" is a working title (`shell/TopBar.tsx`, `index.html`).
 2. The tiled data contract (section 2.3, `docs/DATA_CONTRACT.md`) with Andre and Pierre.
 3. Baseline years, `MIN_DENOMINATOR`, verdict thresholds (`src/config.ts`) with Pierre.
 4. The source for "fires reported on the ground" (section 2.5), and which presets have it.
@@ -70,12 +71,17 @@
 | Select region + date range, download | Month range picker with quick ranges. CSV with a provenance header. Shareable link. | `TimeRangePicker`, `ExportButton`, `urlState.ts` |
 | Raw vs harmonized (core evidence) | Toggle Harmonized / MODIS / VIIRS S-NPP / VIIRS NOAA-20. Overlap chart showing the false 2012 step in the stitched raw record. | `DisplayOptions`, `OverlapChart` |
 
-**Easy to navigate:** a numbered left column ("1. Choose an area", "2. Choose months", "3. Display"). The globe sits beside it. Results scroll below with a sticky section menu (Summary, Calendar, Seasons, Anomalies, Sensors, Reported, Download). The first preset loads automatically, so a judge sees results immediately. A skip link and full keyboard use are included.
+**Easy to navigate (map-first, like Google Maps):**
+- The globe fills the screen. A top pill shows the app name and the current area and months; clicking it opens Area. Round Guide and About buttons sit top right.
+- Feature boxes at the edges open side drawers: left Area, Dates, Layers; right Calendar, Trends, Sensors, Reported (only where ground statistics exist), Download. One drawer at a time; Esc or × closes it.
+- A bottom strip holds the colour legend, a one-line verdict ("October 2026: 32,066 hotspots · Above typical (87th percentile)") and More info, which expands into the summary cards.
+- A short step-by-step guide opens on the first visit; the Guide button reopens it.
+- The first preset loads automatically, so a judge sees results immediately. Full keyboard use, a skip link, and a phone layout (boxes in one scrolling row, drawers as sheets).
 
 ## 2. Key design decisions
 
 ### 2.1 Globe and drawing
-MapLibre GL JS 6 with `projection: { type: 'globe' }`. At low zoom it is a globe; zooming in turns it into a flat map, like Google Maps. Imagery comes from NASA GIBS (Blue Marble day, Black Marble night lights). There are no GIBS overlay layers (pitfall 3). Using GIBS adds a second NASA resource. Terra Draw draws the shapes; the circle uses `projection: 'globe'`, so circles are geodesic. Drawn shapes become an `Area` and are shown with a Neon Yellow outline. Typed coordinates are the keyboard route, so drawing is never the only way.
+MapLibre GL JS 6 with `projection: { type: 'globe' }`. At low zoom it is a globe; zooming in turns it into a flat map, like Google Maps. Imagery comes from NASA GIBS (Blue Marble day, Black Marble night lights). There are no GIBS overlay layers (pitfall 3). Using GIBS adds a second NASA resource. Country borders and place names come from OpenFreeMap (free, no key, OpenStreetMap data) and are kept light: borders, country names, capitals, and other big cities only when zoomed in. Terra Draw draws the shapes; the circle uses `projection: 'globe'`, so circles are geodesic. Drawn shapes become an `Area`, shown with a white outline on a dark casing. Typed coordinates are the keyboard route, so drawing is never the only way.
 
 ### 2.2 Colour ramps relative to the time range
 - **Map cells:** each cell's total over the chosen months. Bins are rebuilt from those totals, so the full ramp is always used.
@@ -107,12 +113,13 @@ None of this is the harmonization method. These are display statistics on its ou
 ### 2.5 "Fires detected and reported"
 Detected means FIRMS hotspots. Reported means a published count of fires attended by fire services, for example England FIRE0802 and StatsWales. It appears only for presets that have one (`reported.json`), labelled as context, with its source and licence. The mock includes a UK series marked MOCK. The real source is TO CONFIRM item 4.
 
-### 2.6 Brand (spaceappschallenge.org/brand, read 14 Nov 2026)
-- **Palette:** Deep Blue `#07173F` background, Electric Blue `#0042A6` buttons, Blue Yonder `#2E96F5` links, Neon Yellow `#EAFE07` accent only (focus ring, area outline, focus-year line), Martian Red `#8E1100` mock banner, White.
-- **Header:** the brand 45° gradient from Electric Blue to Deep Blue.
-- **Fonts:** Fira Sans for headings, Overpass for body (OFL, bundled via Fontsource, so there are no requests to Google Fonts).
-- **Icons:** Phosphor, as the guide suggests.
-- **Rules:** text stays at contrast ≥ 4.5:1. No logos.
+### 2.6 Visual design (Apple-style, chosen by Aziz)
+- **Materials:** every control floats over the full-screen globe as dark translucent glass (`backdrop-filter`); big surfaces use a thicker glass than small ones.
+- **Colour:** one blue accent (`#409CFF`) for selection, links and focus; filled buttons use Space Apps "Neon Blue" `#0960E1` (white text 5.4:1). Warm colours are reserved for fire: orange for the year in focus, inferno on the map. The mock banner is a slim red bar.
+- **Type:** the system font (San Francisco on Apple devices); tighter tracking on large text, tabular figures for numbers.
+- **Motion:** drawers slide out the way they came in and can be reversed mid-way (CSS transitions start from the current value); More info expands smoothly; buttons react on press.
+- **Icons:** Phosphor (the Space Apps guide suggests Phosphor or Feather).
+- **Rules:** text contrast ≥ 4.5:1 on the glass (checked by axe). No logos. The Space Apps brand palette and fonts are not used, by Aziz's choice; the guide's rules (no logos, credits) still apply.
 
 ### 2.7 Accessibility
 - **Contrast:** WCAG 1.4.11 for graphics, 4.5:1 for text.
@@ -120,7 +127,8 @@ Detected means FIRMS hotspots. Reported means a published count of fires attende
 - **Calendar:** a real `<table>` with labelled cells, arrow-key navigation and a numbers toggle.
 - **Charts:** labelled figures with captions.
 - **Shared links:** a hash URL restores the view.
-- **Automated check:** axe runs in CI.
+- **Preferences:** `prefers-reduced-motion` (no slides), `prefers-reduced-transparency` (solid panels), `prefers-contrast: more` (stronger edges and text).
+- **Automated check:** axe runs in the e2e tests on the globe, a drawer and More info.
 - **Manual checks:** colour-blind emulation and greyscale (Task 25).
 
 ## 3. File structure (all under `demo/`)
@@ -133,11 +141,11 @@ scripts/make-mock-data.ts       deterministic synthetic data in the real format
 scripts/check-data.mjs          build guard: no mock data in production builds
 e2e/app.spec.ts                 end-to-end and accessibility tests
 src/
-  main.tsx                      fonts, theme, React root
-  App.tsx                       page layout and wiring (grows at checkpoints 2, 3, 4)
+  main.tsx                      theme, React root
+  App.tsx                       map-first layout and wiring (grows at checkpoints 2, 3, 4)
   config.ts                     every tunable number (ramp, thresholds, limits)
   dataSource.ts                 which dataset folder to read
-  styles/theme.css              brand tokens and layout
+  styles/theme.css              Apple-style glass, layout, phone layout, accessibility preferences
   test/setup.ts                 Testing Library setup
   lib/                          pure logic, unit tested
     months.ts grid.ts types.ts data.ts area.ts status.ts aggregate.ts
@@ -145,8 +153,9 @@ src/
   state/appState.ts urlState.ts
   hooks/useDataset.ts useAreaData.ts
   components/
-    Header Footer MockBanner AboutPage GlobeMap AreaPanel CoordinateForm Legend AreaSummary
-    TimeRangePicker DisplayOptions BurningCalendar KpiRow PlotFigure SeasonalChart
+    shell/TopBar FeatureRail Drawer BottomStrip GuideTour     the map-first frame
+    MockBanner AboutPage GlobeMap AreaPanel CoordinateForm DisplayOptions Legend AreaSummary
+    TimeRangePicker BurningCalendar KpiRow PlotFigure SeasonalChart
     AnomalyChart OverlapChart ReportedChart ExportButton
 ```
 
@@ -157,10 +166,10 @@ Each checkpoint ends with a stop: run the checks, show Aziz the result, commit a
 | # | Name | Tasks | Aziz sees | Proof |
 | --- | --- | --- | --- | --- |
 | 1 | Engine | 1–8 | Tests for every number the app will show; mock files; a refused production build | `npm test` 42 pass; `npm run build` exits 1 |
-| 2 | Globe and area | 9–13 | The globe; choose an area 4 ways; coloured cells; area summary | 49 pass; manual check list |
-| 3 | Calendar and colour ramps | 14–16 | Month range, data toggle, burning calendar, colours that rescale | 55 pass; manual check list |
-| 4 | Indices, charts, download | 17–22 | Verdict cards, season, anomaly, overlap and reported charts, CSV, share link | 55 pass; manual check list |
-| 5 | Ready to publish | 23–26 | e2e + axe green on desktop and phone, docs, QA sign-off | `npm run test:e2e` 17 pass |
+| 2 | Map-first shell and area | 9–13 | Full-screen globe, boxes and drawers, bottom strip, guide; choose an area 4 ways | 55 pass; manual check list |
+| 3 | Calendar and colour ramps | 14–16 | Dates and Calendar boxes, colours that rescale | 61 pass; manual check list |
+| 4 | Indices, charts, download | 17–22 | Summary cards, Trends, Sensors, Reported, Download and share | 66 pass; manual check list |
+| 5 | Ready to publish | 23–26 | e2e + axe green on desktop and phone, docs, QA sign-off | `npm run test:e2e` 19 pass |
 | 6 | Real data (after the pipeline delivers) | 27 | Same app on FIRMS data | build passes, no banner |
 
 ---
@@ -184,7 +193,7 @@ cd "/Users/azizbenjilani/Nasa "
 npm create vite@latest demo -- --template react-ts --no-interactive --overwrite
 cd demo
 npm install
-npm install --save-exact maplibre-gl@6.18.0 terra-draw@1.39.0 terra-draw-maplibre-gl-adapter@1.5.0 @observablehq/plot@0.6.19 d3-scale@4.0.3 d3-scale-chromatic@3.1.1 @turf/area@7.4.0 @turf/bbox@7.4.0 @turf/bbox-polygon@7.4.0 @turf/boolean-point-in-polygon@7.4.0 @turf/circle@7.4.0 @fontsource/fira-sans@5.3.0 @fontsource/overpass@5.3.0 @phosphor-icons/react@2.1.10
+npm install --save-exact maplibre-gl@6.18.0 terra-draw@1.39.0 terra-draw-maplibre-gl-adapter@1.5.0 @observablehq/plot@0.6.19 d3-scale@4.0.3 d3-scale-chromatic@3.1.1 @turf/area@7.4.0 @turf/bbox@7.4.0 @turf/bbox-polygon@7.4.0 @turf/boolean-point-in-polygon@7.4.0 @turf/circle@7.4.0 @phosphor-icons/react@2.1.10
 npm install --save-exact -D vitest@5.1.0 jsdom@31.0.1 @testing-library/react@16.3.3 @testing-library/jest-dom@7.0.1 @testing-library/user-event@14.6.10 @types/d3-scale@4.0.9 @types/d3-scale-chromatic@3.1.0 @playwright/test@1.65.1 @axe-core/playwright@4.14.0
 rm -rf src/assets src/App.css src/index.css public/favicon.svg public/icons.svg
 mkdir -p src/lib src/state src/hooks src/components src/styles src/test scripts e2e
@@ -1510,8 +1519,8 @@ export const PALETTES: Record<PaletteId, { label: string; interpolate: (t: numbe
   cividis: { label: 'Colour-vision optimised (cividis)', interpolate: interpolateCividis },
 }
 
-export const ZERO_FILL = '#16285a'
-export const NO_DATA_FILL = '#5c6680'
+export const ZERO_FILL = '#2c2c34'
+export const NO_DATA_FILL = '#4a4a52'
 
 export interface CountScale {
   /** Lower bound of each bin. Bin i covers [edges[i], edges[i+1]) and the last bin goes up to max. */
@@ -2074,144 +2083,281 @@ git commit -m "demo: deterministic mock data generator and no-mock build guard"
 
 ---
 
-### Checkpoint 2: Globe and area selection
+### Checkpoint 2: Map-first shell, globe and area selection
 
-### Task 9: Theme, entry point, page frame and About page
+The interface is map-first (Aziz's review of the first layout): the globe fills the screen; a top pill shows the current selection; feature boxes at the edges open side drawers; a bottom strip holds the legend, a one-line verdict and More info; a short guide opens on the first visit. The look is Apple-style dark glass (section 2.6).
 
-**Files:** Create `src/styles/theme.css`, `src/main.tsx` (replace), `src/components/Header.tsx`, `src/components/Footer.tsx`, `src/components/MockBanner.tsx`, `src/components/AboutPage.tsx`
+### Task 9: Theme, entry point, mock banner and About page
 
-- [ ] **Step 1: Create `src/styles/theme.css`** (brand tokens from section 2.6, layout, calendar styles)
+**Files:** Create `src/styles/theme.css`, `src/main.tsx` (replace), `src/components/MockBanner.tsx`, `src/components/AboutPage.tsx`
+
+- [ ] **Step 1: Create `src/styles/theme.css`** (Apple-style dark glass, system font, one accent; see section 2.6)
 
 ```css
 /* Portions of this file were generated with AI assistance (Claude) and reviewed by the team. */
-/* Space Apps brand palette (spaceappschallenge.org/brand): text sits on Deep Blue, Electric Blue or White.
-   Neon Yellow is an accent only (focus, highlights), never a background. Contrast >= 4.5:1 for text. */
+/* Apple-style dark interface: the globe is full-bleed and every control floats over it as a translucent
+   "glass" material. One blue accent; warm colours are reserved for fire data. System font. */
 :root {
-  --deep-blue: #07173f;
-  --electric-blue: #0042a6;
-  --neon-blue: #0960e1;
-  --blue-yonder: #2e96f5;
-  --rocket-red: #e43700;
-  --martian-red: #8e1100;
-  --neon-yellow: #eafe07;
-  --white: #ffffff;
-  --muted: #c9d3ea;
-  --line: rgba(255, 255, 255, 0.18);
-  --panel: rgba(255, 255, 255, 0.04);
-  --font-head: 'Fira Sans', system-ui, sans-serif;
-  --font-body: 'Overpass', system-ui, sans-serif;
   color-scheme: dark;
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --label: #ffffff;
+  --label-2: rgba(235, 235, 245, 0.72);
+  --label-3: rgba(235, 235, 245, 0.55);
+  --glass: rgba(30, 30, 32, 0.74);
+  --glass-strong: rgba(30, 30, 32, 0.86);
+  --fill: rgba(118, 118, 128, 0.24);
+  --fill-hover: rgba(118, 118, 128, 0.38);
+  --fill-quiet: rgba(118, 118, 128, 0.14);
+  --separator: rgba(84, 84, 88, 0.6);
+  --edge: rgba(255, 255, 255, 0.1);
+  --accent: #409cff;          /* links, focus, selection (5.9:1 on the glass) */
+  --accent-fill: #0960e1;     /* filled buttons: Space Apps "Neon Blue", white text 5.4:1 */
+  --accent-tint: rgba(10, 132, 255, 0.24);
+  --yellow: #ffd60a;
+  --orange: #ff9f0a;
+  --red: #ff6961;
+  --mint: #64d2ff;
+  --danger-fill: #b3261e;
+  --r-s: 10px;
+  --r-m: 14px;
+  --r-l: 18px;
+  --shadow: 0 10px 34px rgba(0, 0, 0, 0.38), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --blur: saturate(180%) blur(22px);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --banner-h: 0px;
+  --top-h: 56px;
+  --strip-h: 116px;
+  --rail-w: 76px;
 }
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; min-height: 100%; }
-body { background: var(--deep-blue); color: var(--white); font: 16px/1.5 var(--font-body); }
-h1, h2, h3 { font-family: var(--font-head); font-weight: 700; line-height: 1.2; margin: 0 0 0.5rem; }
-h1 { font-weight: 900; font-size: 1.5rem; }
-h2 { font-size: 1.25rem; }
-h3 { font-size: 1rem; }
-a { color: var(--blue-yonder); }
+body {
+  background: #000; color: var(--label);
+  font: 15px/1.45 var(--font); letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3 { font-family: var(--font-display); margin: 0 0 0.5rem; line-height: 1.15; }
+h2 { font-size: 1.3rem; font-weight: 700; letter-spacing: -0.02em; }
+h3 { font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
 p { margin: 0 0 0.75rem; }
-.muted { color: var(--muted); }
-.small { font-size: 0.875rem; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.muted { color: var(--label-2); }
+.small { font-size: 0.8125rem; letter-spacing: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-
-:focus-visible { outline: 3px solid var(--neon-yellow); outline-offset: 2px; }
-.skip-link { position: absolute; left: -9999px; top: 0; background: var(--white); color: var(--deep-blue); padding: 0.5rem 1rem; z-index: 10; }
-.skip-link:focus { left: 1rem; }
-
-button, select, input { font: inherit; color: inherit; }
-button { cursor: pointer; }
-.btn { background: var(--electric-blue); color: var(--white); border: 1px solid var(--blue-yonder); border-radius: 6px; padding: 0.4rem 0.8rem; }
-.btn:hover { background: var(--neon-blue); }
-.btn[aria-pressed='true'] { background: var(--white); color: var(--deep-blue); border-color: var(--white); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
-select, input[type='number'], input[type='text'] {
-  background: var(--deep-blue); border: 1px solid var(--line); border-radius: 6px; padding: 0.35rem 0.5rem; min-width: 0;
-}
-fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; margin: 0 0 1rem; }
-legend { font-family: var(--font-head); font-weight: 700; padding: 0 0.25rem; }
-label { display: block; }
-.error { color: #ffb4a6; } /* light red on deep blue: 9.6:1 */
-
-/* Header: brand gradient Electric Blue (top left) to Deep Blue (bottom right), 45 degrees */
-.header { background: linear-gradient(135deg, var(--electric-blue), var(--deep-blue)); padding: 0.75rem 1.25rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
-.header nav { margin-left: auto; display: flex; gap: 0.5rem; }
-.header .tagline { color: var(--muted); font-size: 0.9rem; }
-.mock-banner { background: var(--martian-red); color: var(--white); font-weight: 700; text-align: center; padding: 0.4rem; letter-spacing: 0.04em; }
-
-/* Explore page layout */
-.explore { display: grid; grid-template-columns: minmax(280px, 340px) 1fr; grid-template-areas: 'controls map' 'results results'; gap: 1rem; padding: 1rem; }
-.controls { grid-area: controls; }
-.map-col { grid-area: map; min-width: 0; }
-.results { grid-area: results; min-width: 0; }
-.globe-wrap { position: relative; height: min(62vh, 640px); border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
-.globe { width: 100%; height: 100%; }
-.map-fallback { padding: 2rem; border: 1px dashed var(--line); border-radius: 10px; }
-@media (max-width: 860px) {
-  .explore { grid-template-columns: 1fr; grid-template-areas: 'map' 'controls' 'results'; }
-  .globe-wrap { height: 50vh; }
-}
-
-.tools { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.tools .btn { display: inline-flex; align-items: center; gap: 0.3rem; }
+.error { color: var(--red); }
 .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: end; }
 .row > label { flex: 1 1 5rem; }
-.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
-.chips .btn { font-size: 0.85rem; padding: 0.2rem 0.6rem; }
 
-.section-nav { position: sticky; top: 0; z-index: 2; background: var(--deep-blue); border-bottom: 1px solid var(--line); display: flex; gap: 1rem; flex-wrap: wrap; padding: 0.5rem 0; margin-bottom: 1rem; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.skip-link { position: absolute; left: -9999px; top: 0; z-index: 50; background: var(--label); color: #000; padding: 0.5rem 1rem; border-radius: var(--r-s); }
+.skip-link:focus { left: 1rem; top: 1rem; }
+
+/* ---------- Controls ---------- */
+button, select, input { font: inherit; color: inherit; letter-spacing: inherit; }
+button { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:active:not(:disabled) { transform: scale(0.96); transition: transform 90ms ease-out; }
+.btn { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--fill); color: var(--label); border: 0; border-radius: var(--r-s); padding: 0.45rem 0.85rem; font-weight: 600; transition: background 120ms ease; }
+.btn:hover { background: var(--fill-hover); }
+.btn[aria-pressed='true'] { background: var(--accent-tint); color: var(--label); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.btn-primary { background: var(--accent-fill); color: #fff; }
+.btn-primary:hover { background: #1a6ff0; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+select, input[type='text'], input[type='number'] {
+  background: var(--fill-quiet); border: 1px solid var(--edge); border-radius: var(--r-s); padding: 0.45rem 0.6rem; min-width: 0;
+}
+select:hover, input[type='text']:hover { background: var(--fill); }
+input[type='radio'], input[type='checkbox'] { accent-color: var(--accent-fill); width: 1rem; height: 1rem; vertical-align: -2px; margin: 0 0.4rem 0 0; }
+fieldset { border: 0; padding: 0; margin: 0 0 1rem; }
+legend { font-weight: 600; font-size: 0.8125rem; color: var(--label-2); padding: 0; margin-bottom: 0.35rem; text-transform: none; }
+label { display: block; margin-bottom: 0.4rem; }
+label > select, label > input[type='text'] { display: block; width: 100%; margin-top: 0.25rem; }
+details > summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 0.75rem 0 0.5rem; }
+.tools { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
+.chips .btn { font-size: 0.8125rem; padding: 0.3rem 0.7rem; border-radius: 999px; }
+.notice { background: var(--fill-quiet); border-left: 3px solid var(--yellow); border-radius: 8px; padding: 0.55rem 0.75rem; margin: 0.5rem 0; }
+
+/* ---------- Glass material ---------- */
+.glass { background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
+
+/* ---------- Map ---------- */
+.mock-banner { position: fixed; top: 0; left: 0; right: 0; height: var(--banner-h); z-index: 30; background: var(--danger-fill); color: #fff; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.06em; text-align: center; line-height: var(--banner-h); }
+.has-banner { --banner-h: 26px; }
+.map-full { position: fixed; inset: var(--banner-h) 0 0 0; z-index: 0; background: #000; }
+.globe { width: 100%; height: 100%; }
+.map-fallback { position: absolute; inset: 30% 20% auto; padding: 1.5rem; border-radius: var(--r-l); background: var(--glass-strong); }
+.maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 10px); right: 2px; }
+.maplibregl-ctrl-group { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border-radius: var(--r-s) !important; box-shadow: var(--shadow) !important; border: 1px solid var(--edge); }
+.maplibregl-ctrl-group button + button { border-top: 1px solid var(--separator) !important; }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }
+
+/* ---------- Top bar ---------- */
+.topbar { position: fixed; top: calc(var(--banner-h) + 10px); left: 10px; right: 10px; z-index: 20; display: flex; align-items: center; gap: 0.6rem; pointer-events: none; }
+.topbar > * { pointer-events: auto; }
+.search-pill { display: flex; align-items: center; gap: 0.6rem; min-width: 0; max-width: min(560px, calc(100vw - 130px)); padding: 0.35rem 1rem 0.35rem 0.4rem; border-radius: 999px; text-align: left;
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
+.search-pill:hover { background: var(--glass-strong); }
+.app-glyph { flex: 0 0 auto; width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(160deg, #ffb340, #ff6a00); color: #fff; }
+.app-glyph svg { width: 1.1rem; height: 1.1rem; }
+.pill-text { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.pill-title { font-weight: 700; font-size: 0.9375rem; letter-spacing: -0.01em; }
+.pill-sub { font-size: 0.8125rem; color: var(--label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-actions { margin-left: auto; display: flex; gap: 0.5rem; }
+.round-btn { width: 2.5rem; height: 2.5rem; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--edge);
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); box-shadow: var(--shadow); }
+.round-btn:hover { background: var(--glass-strong); }
+.round-btn svg { width: 1.15rem; height: 1.15rem; }
+
+/* ---------- Feature boxes: two grouped capsules at the edges ---------- */
+.rails { display: contents; }
+.rail { position: fixed; top: calc(var(--banner-h) + var(--top-h) + 22px); z-index: 15; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: var(--r-l);
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
+.rail-left { left: 10px; }
+.rail-right { right: 10px; }
+.box { width: calc(var(--rail-w) - 12px); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0.55rem 0.2rem 0.45rem; border: 0; border-radius: 12px; background: transparent;
+  font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.01em; color: var(--label); transition: background 120ms ease; }
+.box svg { width: 1.45rem; height: 1.45rem; }
+.box:hover { background: var(--fill-quiet); }
+.box[aria-expanded='true'] { background: var(--accent-tint); color: var(--label); }
+.box[aria-expanded='true'] svg { color: var(--accent); }
+
+/* ---------- Side drawers: slide out the way they came in; CSS transitions reverse from the current value ---------- */
+.drawer { position: fixed; top: calc(var(--banner-h) + var(--top-h) + 22px); bottom: calc(var(--strip-h) + 16px); z-index: 18; display: flex; flex-direction: column;
+  width: min(400px, calc(100vw - 2 * var(--rail-w) - 48px)); border-radius: var(--r-l);
+  background: var(--glass-strong); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
+  border: 1px solid var(--edge); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 340ms var(--ease), opacity 220ms ease; }
+.drawer-wide { width: min(880px, calc(100vw - 2 * var(--rail-w) - 48px)); }
+.drawer-left { left: calc(var(--rail-w) + 20px); transform-origin: left center; }
+.drawer-right { right: calc(var(--rail-w) + 20px); transform-origin: right center; }
+.drawer[data-open='false'] { opacity: 0; pointer-events: none; }
+.drawer-left[data-open='false'] { transform: translateX(-28px) scale(0.98); }
+.drawer-right[data-open='false'] { transform: translateX(28px) scale(0.98); }
+.drawer:focus { outline: none; }
+.drawer:focus-visible { outline: 3px solid var(--accent); }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 0.9rem 0.6rem 1.1rem; }
+.drawer-head h2 { margin: 0; font-size: 1.375rem; }
+.close-btn { width: 1.9rem; height: 1.9rem; border-radius: 50%; display: grid; place-items: center; border: 0; background: var(--fill); color: var(--label-2); }
+.close-btn:hover { background: var(--fill-hover); color: var(--label); }
+.drawer-body { padding: 0.25rem 1.1rem 1.1rem; overflow-y: auto; }
+.drawer-body .card { background: transparent; border: 0; padding: 0; margin: 0 0 1.5rem; }
 .card > header { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; justify-content: space-between; }
-.caption { color: var(--muted); font-size: 0.875rem; margin-top: 0.5rem; }
+.card > header label { margin: 0; color: var(--label-2); font-size: 0.8125rem; }
+.card > header label > select { display: inline-block; width: auto; margin: 0 0 0 0.35rem; }
 
-/* KPI row */
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; }
-.kpi { border: 1px solid var(--line); border-radius: 8px; padding: 0.75rem; }
-.kpi .value { font-family: var(--font-head); font-weight: 900; font-size: 1.75rem; }
-.verdict { display: inline-block; border-radius: 999px; padding: 0.1rem 0.6rem; font-weight: 700; border: 2px solid currentColor; }
+/* ---------- Bottom strip: legend, one-line verdict, More info ---------- */
+.strip { position: fixed; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 20; width: min(1000px, calc(100vw - 20px)); border-radius: var(--r-l);
+  background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
+.strip-more-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 340ms var(--ease); }
+.strip-more-wrap[data-open='true'] { grid-template-rows: 1fr; }
+.strip-more-wrap > .strip-more { min-height: 0; overflow: hidden; }
+.strip-more-wrap[data-open='true'] > .strip-more { overflow-y: auto; max-height: 56vh; padding: 1rem 1rem 0.5rem; border-bottom: 1px solid var(--separator); }
+.strip-bar { display: flex; gap: 1rem; align-items: center; padding: 0.6rem 0.9rem 0.4rem; flex-wrap: wrap; }
+.strip-legend { flex: 1 1 340px; min-width: 0; }
+.strip-headline { flex: 1 1 240px; font-size: 0.875rem; }
+.strip-credit { margin: 0; padding: 0 0.9rem 0.55rem; font-size: 0.6875rem; color: var(--label-3); letter-spacing: 0.01em; }
+.strip-credit a { color: var(--label-2); text-decoration: underline; text-decoration-color: var(--label-3); }
 
-/* Legend */
-.legend { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: center; font-size: 0.8rem; margin-top: 0.5rem; }
-.legend .swatch { display: inline-block; width: 1.4rem; height: 0.9rem; vertical-align: middle; margin-right: 0.25rem; border: 1px solid var(--line); }
+/* ---------- Legends ---------- */
+.legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: center; font-size: 0.75rem; color: var(--label-2); margin: 0.25rem 0 0.75rem; }
+.legend strong { color: var(--label); font-weight: 600; width: 100%; }
+.legend .swatch { display: inline-block; width: 1.25rem; height: 0.75rem; vertical-align: -1px; margin-right: 0.3rem; border-radius: 3px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.legend-compact > .small { color: var(--label-2); font-size: 0.75rem; }
+.legend-compact ul { list-style: none; display: flex; margin: 0.3rem 0 0; padding: 0; }
+.legend-compact li { display: flex; flex-direction: column; align-items: flex-start; }
+.legend-compact .swatch { display: block; width: 2.4rem; height: 0.6rem; }
+.legend-compact li:nth-child(2) .swatch { border-radius: 3px 0 0 3px; }
+.legend-compact li:first-child .swatch { border-radius: 3px; margin-right: 6px; width: 1.4rem; }
+.legend-compact li:last-child .swatch { border-radius: 0 3px 3px 0; }
+.legend-compact .tick { font-size: 0.6875rem; color: var(--label-2); font-variant-numeric: tabular-nums; margin-top: 2px; }
 
-/* Burning calendar */
+/* ---------- Summary cards (More info) ---------- */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.6rem; }
+.kpi { background: var(--fill-quiet); border-radius: var(--r-m); padding: 0.75rem 0.85rem; }
+.kpi .value { font-family: var(--font-display); font-weight: 700; font-size: 1.75rem; letter-spacing: -0.025em; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.verdict { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; padding: 0.1rem 0.6rem 0.1rem 0.5rem; font-weight: 600; font-size: 0.8125rem; background: var(--fill); }
+.verdict::before { content: ''; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: var(--label-2); }
+.verdict-well-below::before, .verdict-below::before { background: var(--mint); }
+.verdict-above::before { background: var(--orange); }
+.verdict-well-above::before { background: var(--red); }
+.caption { color: var(--label-2); font-size: 0.8125rem; margin-top: 0.5rem; }
+
+/* ---------- Burning calendar ---------- */
 .calendar-wrap { overflow-x: auto; }
-table.calendar { border-collapse: separate; border-spacing: 2px; font-size: 0.75rem; }
-table.calendar th { font-weight: 700; color: var(--muted); padding: 0 0.25rem; text-align: right; white-space: nowrap; }
+table.calendar { border-collapse: separate; border-spacing: 3px; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+table.calendar th { font-weight: 600; color: var(--label-2); padding: 0 0.3rem; text-align: right; white-space: nowrap; }
 table.calendar thead th { text-align: center; }
-table.calendar td.c { width: 2.6rem; min-width: 2.6rem; height: 1.4rem; text-align: center; color: #000; border-radius: 2px; position: relative; }
+table.calendar td.c { width: 2.6rem; min-width: 2.6rem; height: 1.45rem; text-align: center; color: #000; border-radius: 5px; position: relative; }
 table.calendar td.c.dark-text { color: #000; }
-table.calendar td.c.light-text { color: var(--white); }
-table.calendar td.c.zero { outline: 1px solid var(--line); outline-offset: -1px; }
-table.calendar td.c.nodata { background: repeating-linear-gradient(45deg, #5c6680 0 3px, #2a3554 3px 6px) !important; }
-table.calendar td.c.outside { opacity: 0.25; }
-table.calendar td.c.nrt::after { content: ''; position: absolute; inset: 2px; border: 1.5px dotted var(--white); border-radius: 2px; pointer-events: none; }
-table.calendar td.c.partial { outline: 2px solid var(--neon-yellow); outline-offset: -2px; }
-table.calendar td.c:focus-visible { outline: 3px solid var(--neon-yellow); outline-offset: 1px; z-index: 1; }
-table.calendar td.total { padding-left: 0.5rem; white-space: nowrap; color: var(--muted); }
-table.calendar td.total .bar { display: inline-block; height: 0.6rem; background: var(--blue-yonder); margin-right: 0.35rem; vertical-align: middle; }
-.cell-detail { min-height: 3rem; margin-top: 0.5rem; }
+table.calendar td.c.light-text { color: #fff; }
+table.calendar td.c.zero { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18); }
+table.calendar td.c.nodata { background: repeating-linear-gradient(45deg, #4a4a52 0 3px, #26262b 3px 6px) !important; }
+table.calendar td.c.outside { opacity: 0.22; }
+table.calendar td.c.nrt::after { content: ''; position: absolute; inset: 2px; border: 1.5px dotted #fff; border-radius: 4px; pointer-events: none; }
+table.calendar td.c.partial { box-shadow: inset 0 0 0 2px var(--yellow); }
+table.calendar td.c:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; z-index: 1; }
+table.calendar td.total { padding-left: 0.5rem; white-space: nowrap; color: var(--label-2); }
+table.calendar td.total .bar { display: inline-block; height: 0.5rem; border-radius: 3px; background: var(--accent); margin-right: 0.35rem; vertical-align: middle; }
+.cell-detail { min-height: 2.6rem; margin-top: 0.6rem; font-size: 0.875rem; }
 
 .figure svg { overflow: visible; }
-.footer { border-top: 1px solid var(--line); padding: 1rem 1.25rem; color: var(--muted); font-size: 0.85rem; }
-.about { max-width: 52rem; padding: 1rem 1.25rem 2rem; }
-.about table { border-collapse: collapse; }
-.about td, .about th { border: 1px solid var(--line); padding: 0.3rem 0.5rem; text-align: left; }
-.notice { border-left: 4px solid var(--neon-yellow); padding: 0.5rem 0.75rem; background: var(--panel); margin: 0.5rem 0; }
+.about { max-width: 52rem; }
+.about table { border-collapse: collapse; font-size: 0.875rem; }
+.about td, .about th { border-bottom: 1px solid var(--separator); padding: 0.4rem 0.6rem 0.4rem 0; text-align: left; }
+.about h2 { margin-top: 1.25rem; font-size: 1.1rem; }
+
+/* ---------- Guide ---------- */
+.tour { position: fixed; inset: 0; z-index: 40; }
+.tour-dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.5); }
+.tour-ring { position: absolute; border-radius: var(--r-m); box-shadow: 0 0 0 3px var(--accent), 0 0 0 9999px rgba(0, 0, 0, 0.5); pointer-events: none; transition: all 340ms var(--ease); }
+.tour-card { position: absolute; width: 320px; max-width: calc(100vw - 20px); border-radius: var(--r-l); padding: 1.1rem; transition: left 340ms var(--ease), top 340ms var(--ease);
+  background: var(--glass-strong); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px); border: 1px solid var(--edge); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); }
+.tour-card:focus { outline: none; }
+.tour-card h2 { font-size: 1.2rem; }
+
+/* ---------- Phones: one scrolling row of boxes above a compact strip; drawers become sheets ---------- */
+@media (max-width: 760px) {
+  :root { --strip-h: 150px; --rail-w: 60px; --top-h: 48px; }
+  .mock-banner .long, .strip-credit .long, .legend-compact > .small { display: none; }
+  .search-pill { max-width: none; flex: 1 1 0; }
+  .rails { display: flex; gap: 0.5rem; position: fixed; left: 0; right: 0; bottom: calc(var(--strip-h) + 14px); z-index: 15; overflow-x: auto; padding: 4px 10px; }
+  .rail { position: static; flex-direction: row; flex: 0 0 auto; }
+  .box { width: var(--rail-w); }
+  .box svg { width: 1.25rem; height: 1.25rem; }
+  .strip-bar { gap: 0.4rem; padding: 0.5rem 0.7rem 0.3rem; }
+  .strip-legend { flex-basis: 100%; }
+  .strip-headline { flex: 1 1 0; min-width: 0; font-size: 0.8125rem; }
+  .legend-compact .swatch { width: 1.9rem; }
+  .legend-compact li:nth-child(n+4):not(:last-child) .tick { visibility: hidden; }
+  .drawer, .drawer-wide { left: 10px; right: 10px; width: auto; top: calc(var(--banner-h) + var(--top-h) + 16px); bottom: calc(var(--strip-h) + 92px); }
+  .drawer-left[data-open='false'], .drawer-right[data-open='false'] { transform: translateY(24px) scale(0.98); }
+  .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 92px); }
+}
+
+/* ---------- Accessibility preferences ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, .drawer, .strip-more-wrap, .tour-ring, .tour-card { transition-duration: 1ms !important; }
+  .drawer[data-open='false'] { transform: none !important; }
+  button:active:not(:disabled) { transform: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --glass: #1e1e20; --glass-strong: #1e1e20; }
+  .glass, .search-pill, .round-btn, .rail, .drawer, .strip, .tour-card, .maplibregl-ctrl-group { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
+@media (prefers-contrast: more) {
+  :root { --glass: #121214; --glass-strong: #121214; --edge: rgba(255, 255, 255, 0.6); --label-2: rgba(235, 235, 245, 0.9); --label-3: rgba(235, 235, 245, 0.8); }
+}
 ```
 
-- [ ] **Step 2: Replace `src/main.tsx`**
+- [ ] **Step 2: Replace `src/main.tsx`** (system fonts: no font packages)
 
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@fontsource/fira-sans/700.css'
-import '@fontsource/fira-sans/900.css'
-import '@fontsource/overpass/400.css'
-import '@fontsource/overpass/700.css'
-import '@fontsource/overpass/400-italic.css'
 import './styles/theme.css'
 import App from './App'
 
@@ -2224,52 +2370,15 @@ createRoot(document.getElementById('root')!).render(
 
 - [ ] **Step 3: Create the frame components**
 
-`src/components/Header.tsx`
-```tsx
-// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import type { View } from '../state/appState'
-
-export function Header({ view, onView }: { view: View; onView: (v: View) => void }) {
-  return (
-    <header className="header">
-      <div>
-        <h1>Hotspot Calendar</h1>
-        <div className="tagline">25 years of satellite fire detections, MODIS and VIIRS on one scale</div>
-      </div>
-      <nav aria-label="Pages">
-        <button className="btn" aria-pressed={view === 'explore'} onClick={() => onView('explore')}>Explore</button>
-        <button className="btn" aria-pressed={view === 'about'} onClick={() => onView('about')}>About &amp; methods</button>
-      </nav>
-    </header>
-  )
-}
-```
-
 `src/components/MockBanner.tsx`
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 export function MockBanner() {
-  return <div className="mock-banner" role="region" aria-label="Mock data warning">MOCK DATA, NOT REAL. Synthetic numbers for testing the app.</div>
+  return <div className="mock-banner" role="region" aria-label="Mock data warning">MOCK DATA, NOT REAL.<span className="long"> Synthetic numbers for testing the app.</span></div>
 }
 ```
 
-`src/components/Footer.tsx`
-```tsx
-// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-export function Footer() {
-  return (
-    <footer className="footer">
-      <p>Data: NASA FIRMS (MODIS C6.1, VIIRS 375 m). Not an official warning service. Imagery: NASA GIBS.</p>
-      <p>
-        Built for the NASA International Space Apps Challenge 2026. Not an official NASA product.
-        For current fires see the <a href="https://firms.modaps.eosdis.nasa.gov/map/">NASA FIRMS Fire Map</a>; for warnings follow your local authorities.
-      </p>
-    </footer>
-  )
-}
-```
-
-`src/components/AboutPage.tsx` (all method facts come from the manifest. Pierre and Guido own the method wording.)
+`src/components/AboutPage.tsx` (shown in a drawer. All method facts come from the manifest; Pierre and Guido own the method wording.)
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // Method text is a placeholder until Pierre and Guido write it (docs/METHODS.md). Do not invent the method here.
@@ -2278,7 +2387,7 @@ import type { Manifest } from '../lib/types'
 export function AboutPage({ manifest }: { manifest: Manifest }) {
   const m = manifest
   return (
-    <main className="about" id="main">
+    <div className="about">
       <h2>What this shows</h2>
       <p>
         A monthly calendar of satellite fire detections ("hotspots") for any area you choose, from the early 2000s to now,
@@ -2331,7 +2440,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
 
       <h2>Use of AI</h2>
       <p>Parts of this app's code were generated with AI assistance (Claude) and reviewed by the team. The harmonization method is the team's own work. See docs/AI_USE.md in the repository.</p>
-    </main>
+    </div>
   )
 }
 ```
@@ -2339,8 +2448,8 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
 - [ ] **Step 4: Commit** (typechecks once App lands in Task 13)
 
 ```bash
-git add src/styles src/main.tsx src/components/Header.tsx src/components/Footer.tsx src/components/MockBanner.tsx src/components/AboutPage.tsx
-git commit -m "demo: brand theme, header, footer, mock banner, about page"
+git add src/styles src/main.tsx src/components/MockBanner.tsx src/components/AboutPage.tsx
+git commit -m "demo: Apple-style theme, mock banner, about page"
 ```
 
 ### Task 10: App state and data hooks
@@ -2571,12 +2680,12 @@ git commit -m "demo: app state reducer, quick ranges, dataset and area hooks"
 
 **Files:** Create `src/components/GlobeMap.tsx`
 
-- [ ] **Step 1: Create `src/components/GlobeMap.tsx`.** It contains the two MapLibre 6 fixes from section 0: the named import and the explicit worker URL. Don't remove them.
+- [ ] **Step 1: Create `src/components/GlobeMap.tsx`.** It keeps the MapLibre 6 fixes from section 0 (named import, explicit worker URL), draws only NASA base imagery (pitfall 3), adds light borders and place names from OpenFreeMap (country borders, country names, capitals, big cities only when zoomed in), a soft atmosphere, and a white area outline on a dark casing. Credits are shown in the bottom strip, so MapLibre's own attribution box is off.
 
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { useEffect, useRef, useState } from 'react'
-import { Map as MLMap, NavigationControl, setWorkerUrl, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
+import { Map as MLMap, NavigationControl, setWorkerUrl, type ExpressionSpecification, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import { TerraDraw, TerraDrawCircleMode, TerraDrawFreehandMode, TerraDrawPolygonMode, TerraDrawRectangleMode } from 'terra-draw'
@@ -2594,10 +2703,20 @@ const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
 const gibs = (layer: string, level: number, ext: string, date = '') =>
   `${GIBS}/${layer}/default/${date ? date + '/' : ''}GoogleMapsCompatible_Level${level}/{z}/{y}/{x}.${ext}`
 
+// Borders and place names come from OpenFreeMap (free, no key; OpenStreetMap data). Kept light on purpose:
+// country borders, country names, capitals, and other big cities only when zoomed in.
+const OSM_NAME: ExpressionSpecification = ['coalesce', ['get', 'name:en'], ['get', 'name']]
+const LABEL_PAINT = { 'text-color': '#ffffff', 'text-halo-color': 'rgba(7,23,63,0.85)', 'text-halo-width': 1.4 }
+export const LABEL_LAYERS = ['borders', 'country-labels', 'city-labels']
+
 export const MAP_STYLE: StyleSpecification = {
   version: 8,
   projection: { type: 'globe' },
+  glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+  // A soft atmosphere around the globe, fading out as you zoom in to a flat map.
+  sky: { 'atmosphere-blend': ['interpolate', ['linear'], ['zoom'], 0, 1, 5, 1, 7, 0] },
   sources: {
+    osm: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
     day: { type: 'raster', tileSize: 256, maxzoom: 8, tiles: [gibs('BlueMarble_ShadedRelief_Bathymetry', 8, 'jpeg')],
       attribution: 'Imagery: NASA GIBS (Blue Marble)' },
     night: { type: 'raster', tileSize: 256, maxzoom: 8, tiles: [gibs('VIIRS_Black_Marble', 8, 'png', '2016-01-01')],
@@ -2606,9 +2725,26 @@ export const MAP_STYLE: StyleSpecification = {
     // black or as HTTP 500, and MapLibre's globe draws each failed tile as a black square over everything.
   },
   layers: [
-    { id: 'background', type: 'background', paint: { 'background-color': '#07173F' } },
+    { id: 'background', type: 'background', paint: { 'background-color': '#000000' } },
     { id: 'day', type: 'raster', source: 'day' },
     { id: 'night', type: 'raster', source: 'night', layout: { visibility: 'none' } },
+    {
+      id: 'borders', type: 'line', source: 'osm', 'source-layer': 'boundary',
+      filter: ['all', ['==', ['get', 'admin_level'], 2], ['!=', ['get', 'maritime'], 1]],
+      paint: { 'line-color': '#ffffff', 'line-opacity': 0.55, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.5, 6, 1.4] },
+    },
+    {
+      id: 'country-labels', type: 'symbol', source: 'osm', 'source-layer': 'place',
+      filter: ['==', ['get', 'class'], 'country'],
+      layout: { 'text-field': OSM_NAME, 'text-font': ['Noto Sans Bold'], 'text-size': ['interpolate', ['linear'], ['zoom'], 1, 10, 6, 15], 'text-max-width': 8 },
+      paint: LABEL_PAINT,
+    },
+    {
+      id: 'city-labels', type: 'symbol', source: 'osm', 'source-layer': 'place', minzoom: 3,
+      filter: ['all', ['==', ['get', 'class'], 'city'], ['any', ['==', ['get', 'capital'], 2], ['>=', ['zoom'], 5]]],
+      layout: { 'text-field': OSM_NAME, 'text-font': ['Noto Sans Regular'], 'text-size': 11 },
+      paint: LABEL_PAINT,
+    },
   ],
 }
 
@@ -2622,13 +2758,13 @@ export interface GlobeMapProps {
   overview: GeoJSON.FeatureCollection
   tool: DrawTool
   basemap: Basemap
-  /** Reserved for a borders/labels overlay (see plan section 2.1); not drawn yet. */
+  /** Country borders and place names. */
   labels: boolean
   /** Called once when the user finishes drawing a shape. */
   onDrawn: (area: Area) => void
 }
 
-export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: GlobeMapProps) {
+export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn }: GlobeMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
@@ -2643,21 +2779,24 @@ export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: Glob
   useEffect(() => {
     let map: MLMap
     try {
-      map = new MLMap({ container: container.current!, style: structuredClone(MAP_STYLE), center: [10, 15], zoom: 1.4, attributionControl: { compact: true } })
+      // Credits are shown in the bottom strip (always visible), so MapLibre's own attribution box is off.
+      map = new MLMap({ container: container.current!, style: structuredClone(MAP_STYLE), center: [10, 15], zoom: 1.4, attributionControl: false })
     } catch (e) {
       setFailed(e instanceof Error ? e.message : String(e))
       return
     }
     mapRef.current = map
-    map.addControl(new NavigationControl({ visualizePitch: false }), 'top-right')
+    map.addControl(new NavigationControl({ visualizePitch: false }), 'bottom-right')
     map.on('load', () => {
       map.addSource('overview', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } })
+      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } }, 'borders')
       map.addSource('cells', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.85 } })
-      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#07173F', 'line-width': 0.5 } })
+      map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.8 } }, 'borders')
+      map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#000000', 'line-opacity': 0.35, 'line-width': 0.5 } }, 'borders')
       map.addSource('area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'area', type: 'line', source: 'area', paint: { 'line-color': '#EAFE07', 'line-width': 2.5 } })
+      // White outline on a dark casing: readable over imagery and over every ramp colour.
+      map.addLayer({ id: 'area-casing', type: 'line', source: 'area', paint: { 'line-color': '#000000', 'line-opacity': 0.55, 'line-width': 6 } })
+      map.addLayer({ id: 'area', type: 'line', source: 'area', paint: { 'line-color': '#ffffff', 'line-width': 2.25 } })
 
       const draw = new TerraDraw({
         adapter: new TerraDrawMapLibreGLAdapter({ map }),
@@ -2710,7 +2849,10 @@ export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: Glob
     ;(map.getSource('area') as GeoJSONSource | undefined)?.setData(areaToFeatures(area?.geometry ?? null))
     if (area) {
       const [w, s, e, n] = area.bbox
-      map.fitBounds([[w, s], [e, n]], { padding: 48, maxZoom: 6, duration: 1200 })
+      // Keep the area clear of the floating controls (top bar, side boxes, bottom strip).
+      const phone = map.getContainer().clientWidth < 760
+      const padding = phone ? { top: 70, bottom: 250, left: 20, right: 20 } : { top: 90, bottom: 150, left: 110, right: 110 }
+      map.fitBounds([[w, s], [e, n]], { padding, maxZoom: 6, duration: 1200 })
     }
   }, [ready, area])
 
@@ -2719,7 +2861,8 @@ export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: Glob
     if (!ready || !map) return
     map.setLayoutProperty('day', 'visibility', basemap === 'day' ? 'visible' : 'none')
     map.setLayoutProperty('night', 'visibility', basemap === 'night' ? 'visible' : 'none')
-  }, [ready, basemap])
+    for (const id of LABEL_LAYERS) map.setLayoutProperty(id, 'visibility', labels ? 'visible' : 'none')
+  }, [ready, basemap, labels])
 
   if (failed) {
     return (
@@ -2736,15 +2879,16 @@ export function GlobeMap({ area, cells, overview, tool, basemap, onDrawn }: Glob
 
 ```bash
 git add src/components/GlobeMap.tsx
-git commit -m "demo: MapLibre globe with NASA GIBS imagery, data layers and Terra Draw tools"
+git commit -m "demo: MapLibre globe with NASA GIBS imagery, light labels, data layers and Terra Draw tools"
 ```
 
-### Task 12: Area controls, legend and summary
+### Task 12: Area and layer controls, legend and summary
 
-**Files:** Create `src/components/CoordinateForm.tsx`, `src/components/CoordinateForm.test.tsx`, `src/components/AreaPanel.tsx`, `src/components/Legend.tsx`, `src/components/AreaSummary.tsx`
+**Files:** Create `src/components/CoordinateForm.tsx`, `src/components/CoordinateForm.test.tsx`, `src/components/AreaPanel.tsx`, `src/components/DisplayOptions.tsx`, `src/components/Legend.tsx`, `src/components/Legend.test.tsx`, `src/components/AreaSummary.tsx`
 
-- [ ] **Step 1: Write the failing test** `src/components/CoordinateForm.test.tsx`
+- [ ] **Step 1: Write the failing tests**
 
+`src/components/CoordinateForm.test.tsx`
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { render, screen } from '@testing-library/react'
@@ -2787,10 +2931,23 @@ describe('CoordinateForm', () => {
 })
 ```
 
-- [ ] **Step 2: Run it to see it fail**
+`src/components/Legend.test.tsx`
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+import { describe, expect, it } from 'vitest'
+import { shortCount } from './Legend'
 
-Run: `npx vitest run src/components/CoordinateForm.test.tsx`
-Expected: FAIL, `Failed to resolve import "./CoordinateForm"`.
+describe('shortCount', () => {
+  it('abbreviates large counts for the legend ticks', () => {
+    expect([shortCount(950), shortCount(5853), shortCount(16890), shortCount(1234567)]).toEqual(['950', '5.9k', '17k', '1.2M'])
+  })
+})
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npx vitest run src/components/CoordinateForm.test.tsx src/components/Legend.test.tsx`
+Expected: FAIL, `Failed to resolve import "./CoordinateForm"` and `"./Legend"`.
 
 - [ ] **Step 3: Implement**
 
@@ -2898,8 +3055,7 @@ export interface AreaPanelProps {
 export function AreaPanel({ presets, area, tool, onTool, onArea, error }: AreaPanelProps) {
   const presetValue = area?.source === 'preset' ? area.presetId ?? '' : ''
   return (
-    <fieldset>
-      <legend>1. Choose an area</legend>
+    <div>
       <label>
         Preset region
         <select value={presetValue} onChange={(e) => {
@@ -2924,28 +3080,109 @@ export function AreaPanel({ presets, area, tool, onTool, onArea, error }: AreaPa
         <summary>Or type coordinates</summary>
         <CoordinateForm onArea={onArea} />
       </details>
-    </fieldset>
+    </div>
   )
 }
 ```
 
-`src/components/Legend.tsx`
+`src/components/DisplayOptions.tsx` (the Layers drawer: data source, colour scaling, ramp, imagery, labels)
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import { NO_DATA_FILL, ZERO_FILL, type CountScale } from '../lib/colorScale'
+import { PALETTES, type PaletteId } from '../lib/colorScale'
+import { SERIES_KEYS, SERIES_LABELS, type SeriesKey } from '../lib/types'
+import type { ScaleTo } from '../state/appState'
+import type { Basemap } from './GlobeMap'
+
+export interface DisplayOptionsProps {
+  source: SeriesKey
+  scaleTo: ScaleTo
+  palette: PaletteId
+  basemap: Basemap
+  labels: boolean
+  onSource: (s: SeriesKey) => void
+  onScaleTo: (s: ScaleTo) => void
+  onPalette: (p: PaletteId) => void
+  onBasemap: (b: Basemap) => void
+  onLabels: (l: boolean) => void
+}
+
+export function DisplayOptions(p: DisplayOptionsProps) {
+  return (
+    <div>
+      <fieldset>
+        <legend className="small">Data</legend>
+        {SERIES_KEYS.map((k) => (
+          <label key={k}>
+            <input type="radio" name="source" checked={p.source === k} onChange={() => p.onSource(k)} /> {SERIES_LABELS[k]}
+          </label>
+        ))}
+      </fieldset>
+      <fieldset>
+        <legend className="small">Calendar colours scaled to</legend>
+        <label><input type="radio" name="scale" checked={p.scaleTo === 'range'} onChange={() => p.onScaleTo('range')} /> The months I chose</label>
+        <label><input type="radio" name="scale" checked={p.scaleTo === 'record'} onChange={() => p.onScaleTo('record')} /> The whole record</label>
+      </fieldset>
+      <label>
+        Colour ramp
+        <select value={p.palette} onChange={(e) => p.onPalette(e.target.value as PaletteId)}>
+          {(Object.keys(PALETTES) as PaletteId[]).map((id) => <option key={id} value={id}>{PALETTES[id].label}</option>)}
+        </select>
+      </label>
+      <label>
+        Globe imagery
+        <select value={p.basemap} onChange={(e) => p.onBasemap(e.target.value as Basemap)}>
+          <option value="day">Blue Marble (day)</option>
+          <option value="night">Black Marble (night lights)</option>
+        </select>
+      </label>
+      <label><input type="checkbox" checked={p.labels} onChange={(e) => p.onLabels(e.target.checked)} /> Borders and place names</label>
+    </div>
+  )
+}
+```
+
+`src/components/Legend.tsx` (full legend for the calendar; compact ramp for the bottom strip)
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+import { fmtCount, NO_DATA_FILL, ZERO_FILL, type CountScale } from '../lib/colorScale'
+
+const HATCH = `repeating-linear-gradient(45deg, ${NO_DATA_FILL} 0 3px, #26262b 3px 6px)`
+
+/** Short tick labels for a narrow ramp: 950, 5.9k, 17k, 1.2M. Full values stay in the screen-reader text. */
+export function shortCount(v: number): string {
+  if (v < 1000) return fmtCount(v)
+  if (v < 1e6) return `${v < 1e4 ? (Math.round(v / 100) / 10).toString() : Math.round(v / 1000)}k`
+  return `${Math.round(v / 1e5) / 10}M`
+}
+
+/** A ramp of swatches with the lower edge of each bin printed under it (for the bottom strip). */
+export function CompactLegend({ scale, title }: { scale: CountScale; title: string }) {
+  return (
+    <div className="legend-compact">
+      <div className="small">{title}</div>
+      <ul aria-label={title}>
+        <li><span className="swatch" style={{ background: HATCH }} /><span className="tick">none</span><span className="sr-only">No sensor or not yet</span></li>
+        <li><span className="swatch" style={{ background: ZERO_FILL }} /><span className="tick">0</span></li>
+        {scale.colors.map((c, i) => (
+          <li key={c + i}><span className="swatch" style={{ background: c }} /><span className="tick" aria-hidden>{shortCount(scale.edges[i])}</span><span className="sr-only">{scale.labels[i]}</span></li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
 export function Legend({ scale, title, id, showNrt = false }: { scale: CountScale; title: string; id?: string; showNrt?: boolean }) {
   return (
     <div className="legend" id={id} aria-label={title}>
       <strong>{title}</strong>
-      <span><span className="swatch" style={{ background: `repeating-linear-gradient(45deg, ${NO_DATA_FILL} 0 3px, #2a3554 3px 6px)` }} />No sensor / not yet</span>
+      <span><span className="swatch" style={{ background: HATCH }} />No sensor / not yet</span>
       <span><span className="swatch" style={{ background: ZERO_FILL }} />0</span>
       {scale.colors.map((c, i) => (
         <span key={c + i}><span className="swatch" style={{ background: c }} />{scale.labels[i]}</span>
       ))}
       {showNrt && <>
         <span><span className="swatch" style={{ border: '1.5px dotted #fff' }} />Near real-time: provisional</span>
-        <span><span className="swatch" style={{ outline: '2px solid var(--neon-yellow)', outlineOffset: '-2px' }} />Month to date</span>
+        <span><span className="swatch" style={{ boxShadow: 'inset 0 0 0 2px var(--yellow)' }} />Month to date</span>
       </>}
     </div>
   )
@@ -2974,36 +3211,380 @@ export function AreaSummary({ area, data, gridDeg }: { area: Area | null; data: 
 }
 ```
 
-- [ ] **Step 4: Run it to see it pass**
+- [ ] **Step 4: Run them to see them pass**
 
-Run: `npx vitest run src/components/CoordinateForm.test.tsx`
-Expected: `Tests  3 passed (3)`
+Run: `npx vitest run src/components/CoordinateForm.test.tsx src/components/Legend.test.tsx`
+Expected: `Tests  4 passed (4)`
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/CoordinateForm.tsx src/components/CoordinateForm.test.tsx src/components/AreaPanel.tsx src/components/Legend.tsx src/components/AreaSummary.tsx
-git commit -m "demo: presets, drawing tools, typed coordinates, legend, area summary"
+git add src/components/CoordinateForm.tsx src/components/CoordinateForm.test.tsx src/components/AreaPanel.tsx src/components/DisplayOptions.tsx src/components/Legend.tsx src/components/Legend.test.tsx src/components/AreaSummary.tsx
+git commit -m "demo: presets, drawing tools, typed coordinates, layer options, legends, area summary"
 ```
 
-### Task 13: Wire App (Checkpoint 2 version)
+### Task 13: Map-first shell and App (Checkpoint 2 version)
 
-**Files:** Replace `src/App.tsx`
+**Files:** Create `src/components/shell/TopBar.tsx`, `FeatureRail.tsx`, `Drawer.tsx`, `Drawer.test.tsx`, `BottomStrip.tsx`, `GuideTour.tsx`, `GuideTour.test.tsx`; replace `src/App.tsx`
 
-- [ ] **Step 1: Replace `src/App.tsx`**
+- [ ] **Step 1: Write the failing tests**
+
+`src/components/shell/Drawer.test.tsx`
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+import { Drawer } from './Drawer'
+import { FeatureRail } from './FeatureRail'
+
+describe('FeatureRail and Drawer', () => {
+  it('marks the open box and closes the drawer with Escape or the close button', async () => {
+    const onToggle = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <>
+        <FeatureRail side="left" label="Tools" open="area" onToggle={onToggle}
+          boxes={[{ id: 'area', label: 'Area', icon: null }, { id: 'dates', label: 'Dates', icon: null }]} />
+        <Drawer open side="left" title="Choose an area" onClose={onClose}><p>Body</p></Drawer>
+      </>,
+    )
+    expect(screen.getByRole('button', { name: 'Area' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'Dates' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('region', { name: 'Choose an area' })).toHaveFocus()
+    await userEvent.click(screen.getByRole('button', { name: 'Dates' }))
+    expect(onToggle).toHaveBeenCalledWith('dates')
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByRole('button', { name: 'Close Choose an area' }))
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+  it('hides a closed drawer from assistive tech and ignores Escape', async () => {
+    const onClose = vi.fn()
+    render(<Drawer open={false} side="right" title="Calendar" onClose={onClose}><p>Body</p></Drawer>)
+    expect(screen.queryByRole('region', { name: 'Calendar' })).toBeNull()
+    await userEvent.keyboard('{Escape}')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+})
+```
+
+`src/components/shell/GuideTour.test.tsx`
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { describe, expect, it, vi } from 'vitest'
+import { GuideTour, guideSeen, markGuideSeen } from './GuideTour'
+
+const steps = [
+  { target: null, title: 'Welcome', text: 'Intro' },
+  { target: 'box-area', title: 'Area', text: 'Pick an area' },
+]
+
+describe('GuideTour', () => {
+  it('walks forward and back, then finishes', async () => {
+    const onClose = vi.fn()
+    render(<><button data-tour="box-area">Area</button><GuideTour steps={steps} onClose={onClose} /></>)
+    expect(screen.getByRole('dialog', { name: 'Welcome' })).toBeInTheDocument()
+    expect(screen.getByText('Step 1 of 2')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }))
+    expect(screen.getByRole('heading', { name: 'Area' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('heading', { name: 'Welcome' })).toBeInTheDocument()
+    await userEvent.keyboard('{ArrowRight}')
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+  it('closes with Escape or Skip', async () => {
+    const onClose = vi.fn()
+    render(<GuideTour steps={steps} onClose={onClose} />)
+    await userEvent.keyboard('{Escape}')
+    await userEvent.click(screen.getByRole('button', { name: 'Skip guide' }))
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+  it('remembers that the guide was seen', () => {
+    localStorage.clear()
+    expect(guideSeen()).toBe(false)
+    markGuideSeen()
+    expect(guideSeen()).toBe(true)
+  })
+})
+```
+
+- [ ] **Step 2: Run them to see them fail**
+
+Run: `npx vitest run src/components/shell`
+Expected: FAIL, `Failed to resolve import "./Drawer"` and `"./GuideTour"`.
+
+- [ ] **Step 3: Implement the shell**
+
+`src/components/shell/TopBar.tsx` (one pill with the app name and current selection; round Guide and About buttons)
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+// Apple-Maps-style top bar: one pill with the app name and the current selection (opens Area), and two round buttons.
+import { FireSimple, Info, Question } from '@phosphor-icons/react'
+
+export interface TopBarProps {
+  /** Short description of the current area and months, e.g. "United Kingdom (mock), Jan 2022 – Oct 2026". */
+  selection: string
+  onSelectionClick: () => void
+  onGuide: () => void
+  onAbout: () => void
+}
+
+export function TopBar({ selection, onSelectionClick, onGuide, onAbout }: TopBarProps) {
+  return (
+    <header className="topbar">
+      <button type="button" className="search-pill" data-tour="selection" onClick={onSelectionClick} title="Change the area">
+        <span className="app-glyph" aria-hidden><FireSimple weight="fill" /></span>
+        <span className="pill-text">
+          <span className="pill-title">Hotspot Calendar</span>
+          <span className="pill-sub">{selection}</span>
+        </span>
+        <span className="sr-only">: change the area</span>
+      </button>
+      <div className="topbar-actions">
+        <button type="button" className="round-btn" data-tour="guide" aria-label="Guide" title="Guide" onClick={onGuide}><Question weight="bold" aria-hidden /></button>
+        <button type="button" className="round-btn" aria-label="About" title="About and methods" onClick={onAbout}><Info weight="bold" aria-hidden /></button>
+      </div>
+    </header>
+  )
+}
+```
+
+`src/components/shell/FeatureRail.tsx` (the clickable boxes at the left and right edges)
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+// The clickable boxes around the globe. Each one opens its feature in the side drawer.
+import type { ReactNode } from 'react'
+
+export interface FeatureBox {
+  id: string
+  label: string
+  icon: ReactNode
+}
+
+export interface FeatureRailProps {
+  side: 'left' | 'right'
+  label: string
+  boxes: FeatureBox[]
+  open: string | null
+  onToggle: (id: string) => void
+}
+
+export function FeatureRail({ side, label, boxes, open, onToggle }: FeatureRailProps) {
+  return (
+    <nav className={`rail rail-${side}`} aria-label={label}>
+      {boxes.map((b) => (
+        <button key={b.id} type="button" className="box" data-tour={`box-${b.id}`}
+          aria-expanded={open === b.id} aria-controls={open === b.id ? 'drawer' : undefined}
+          onClick={() => onToggle(b.id)}>
+          {b.icon}
+          <span>{b.label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+```
+
+`src/components/shell/Drawer.tsx` (stays mounted, so it slides out the way it came in and can be reversed mid-way)
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+// Side drawer. It stays mounted so it can slide out the way it came in; CSS transitions start from the
+// current on-screen value, so a drawer reopened mid-close simply turns around.
+import { X } from '@phosphor-icons/react'
+import { useEffect, useRef, type ReactNode } from 'react'
+
+export interface DrawerProps {
+  open: boolean
+  side: 'left' | 'right'
+  wide?: boolean
+  title: string
+  onClose: () => void
+  children: ReactNode
+}
+
+export function Drawer({ open, side, wide = false, title, onClose, children }: DrawerProps) {
+  const ref = useRef<HTMLElement>(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  // Move focus into the drawer when it opens or switches feature.
+  useEffect(() => { if (open) ref.current?.focus() }, [open, title])
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCloseRef.current() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+  return (
+    <section id={open ? 'drawer' : undefined} ref={ref} tabIndex={-1} aria-labelledby={`drawer-title-${side}`}
+      data-open={open} inert={!open} aria-hidden={!open}
+      className={`drawer drawer-${side}${wide ? ' drawer-wide' : ''}`}>
+      <header className="drawer-head">
+        <h2 id={`drawer-title-${side}`}>{title}</h2>
+        <button type="button" className="close-btn" aria-label={`Close ${title}`} onClick={onClose}><X weight="bold" aria-hidden /></button>
+      </header>
+      <div className="drawer-body">{children}</div>
+    </section>
+  )
+}
+```
+
+`src/components/shell/BottomStrip.tsx` (legend, one-line verdict, More info)
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+// The small bar along the bottom: what the colours mean, a one-line verdict, and "More info".
+import { CaretDown, CaretUp } from '@phosphor-icons/react'
+import type { ReactNode } from 'react'
+
+export interface BottomStripProps {
+  legend: ReactNode
+  headline: ReactNode
+  expanded: boolean
+  onToggle: () => void
+  /** Shown above the bar when "More info" is open. */
+  more: ReactNode
+}
+
+export function BottomStrip({ legend, headline, expanded, onToggle, more }: BottomStripProps) {
+  return (
+    <section className="strip" aria-label="Legend and summary" data-tour="strip">
+      <div className="strip-more-wrap" data-open={expanded} inert={!expanded} aria-hidden={!expanded}>
+        {/* Focusable when open, so keyboard users can scroll a long summary. */}
+        <div className="strip-more" id="strip-more" role="region" aria-label="Summary details" tabIndex={expanded ? 0 : -1}>{more}</div>
+      </div>
+      <div className="strip-bar">
+        <div className="strip-legend">{legend}</div>
+        <div className="strip-headline" aria-live="polite">{headline}</div>
+        <button type="button" className="btn" aria-expanded={expanded} aria-controls="strip-more" onClick={onToggle}>
+          {expanded ? <CaretDown aria-hidden /> : <CaretUp aria-hidden />} {expanded ? 'Less' : 'More info'}
+        </button>
+      </div>
+      <p className="strip-credit">
+        Data: NASA FIRMS (MODIS C6.1, VIIRS 375 m). Imagery: NASA GIBS. Labels: <a href="https://openfreemap.org">OpenFreeMap</a>,
+        © <a href="https://www.openmaptiles.org/">OpenMapTiles</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.
+        Not an official warning service<span className="long">; for current fires see
+        the <a href="https://firms.modaps.eosdis.nasa.gov/map/">NASA FIRMS Fire Map</a>. Built for NASA Space Apps 2026, not an official NASA product</span>.
+      </p>
+    </section>
+  )
+}
+```
+
+`src/components/shell/GuideTour.tsx` (step-by-step guide, first visit and from the Guide button)
+```tsx
+// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
+// Short step-by-step guide. Opens on the first visit; the Guide button reopens it.
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+
+export interface GuideStep {
+  /** data-tour value of the element to highlight, or null for a centred card. */
+  target: string | null
+  title: string
+  text: string
+}
+
+export const GUIDE_SEEN_KEY = 'hotspot-calendar-guide-seen'
+
+export function guideSeen(): boolean {
+  try { return localStorage.getItem(GUIDE_SEEN_KEY) === '1' } catch { return false }
+}
+
+export function markGuideSeen() {
+  try { localStorage.setItem(GUIDE_SEEN_KEY, '1') } catch { /* private mode: the guide may show again */ }
+}
+
+const CARD_W = 320
+
+function cardStyle(r: DOMRect | null): CSSProperties {
+  if (!r) return { left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }
+  const vw = window.innerWidth
+  const vh = window.innerHeight
+  let left = r.right + 16
+  if (left + CARD_W > vw - 8) left = r.left - CARD_W - 16
+  if (left < 8) left = Math.min(Math.max(8, r.left), vw - CARD_W - 8)
+  let top = r.top
+  if (top + 220 > vh - 8) top = Math.max(8, r.top - 230)
+  return { left, top }
+}
+
+export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () => void }) {
+  const [i, setI] = useState(0)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const cardRef = useRef<HTMLDivElement>(null)
+  const step = steps[Math.min(i, steps.length - 1)]
+  const last = i >= steps.length - 1
+
+  useLayoutEffect(() => {
+    const el = step.target ? document.querySelector<HTMLElement>(`[data-tour="${step.target}"]`) : null
+    // On phones some boxes sit in a scrolling row: bring the highlighted one into view first.
+    el?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+    setRect(el ? el.getBoundingClientRect() : null)
+  }, [step])
+  useEffect(() => { cardRef.current?.focus() }, [i])
+
+  function onKey(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'Escape') onClose()
+    else if (e.key === 'ArrowRight' && !last) setI(i + 1)
+    else if (e.key === 'ArrowLeft' && i > 0) setI(i - 1)
+    else if (e.key === 'Tab') {
+      // Keep focus inside the guide card while it is open.
+      const items = cardRef.current?.querySelectorAll<HTMLElement>('button')
+      if (!items || items.length === 0) return
+      const first = items[0]
+      const end = items[items.length - 1]
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === cardRef.current)) { e.preventDefault(); end.focus() }
+      else if (!e.shiftKey && document.activeElement === end) { e.preventDefault(); first.focus() }
+    }
+  }
+
+  return (
+    <div className="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" onKeyDown={onKey}>
+      {rect
+        ? <div className="tour-ring" style={{ left: rect.left - 6, top: rect.top - 6, width: rect.width + 12, height: rect.height + 12 }} />
+        : <div className="tour-dim" />}
+      <div className="tour-card" ref={cardRef} tabIndex={-1} style={cardStyle(rect)}>
+        <p className="small muted">Step {i + 1} of {steps.length}</p>
+        <h2 id="tour-title">{step.title}</h2>
+        <p>{step.text}</p>
+        <div className="row">
+          <button type="button" className="btn" onClick={onClose}>Skip guide</button>
+          {i > 0 && <button type="button" className="btn" onClick={() => setI(i - 1)}>Back</button>}
+          <button type="button" className="btn btn-primary" onClick={() => (last ? onClose() : setI(i + 1))}>{last ? 'Done' : 'Next'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+- [ ] **Step 4: Run them to see them pass**
+
+Run: `npx vitest run src/components/shell`
+Expected: `Tests  5 passed (5)`
+
+- [ ] **Step 5: Replace `src/App.tsx`** (Checkpoint 2 version: Area and Layers boxes, bottom strip, guide)
 
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// Checkpoint 2 version: globe, area selection and area summary. Replaced at checkpoints 3 and 4.
-import { useMemo, useReducer, useState } from 'react'
+// Checkpoint 2 version: globe, Area and Layers, bottom strip and guide. Replaced at checkpoint 3.
+// Map-first layout: the globe fills the screen; feature boxes around it open side drawers;
+// the bottom strip holds the legend, a one-line verdict and "More info".
+import { Info, MapPin, Stack } from '@phosphor-icons/react'
+import { useCallback, useMemo, useReducer, useState, type ReactNode } from 'react'
 import { AboutPage } from './components/AboutPage'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
-import { Footer } from './components/Footer'
+import { DisplayOptions } from './components/DisplayOptions'
 import { GlobeMap } from './components/GlobeMap'
-import { Header } from './components/Header'
-import { Legend } from './components/Legend'
+import { CompactLegend } from './components/Legend'
 import { MockBanner } from './components/MockBanner'
+import { BottomStrip } from './components/shell/BottomStrip'
+import { Drawer } from './components/shell/Drawer'
+import { FeatureRail, type FeatureBox } from './components/shell/FeatureRail'
+import { GuideTour, guideSeen, markGuideSeen, type GuideStep } from './components/shell/GuideTour'
+import { TopBar } from './components/shell/TopBar'
 import { RAMP } from './config'
 import { dataSource } from './dataSource'
 import { useAreaData } from './hooks/useAreaData'
@@ -3011,8 +3592,9 @@ import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
+import { summarizeMonth, VERDICT_LABELS } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
-import { labelYm } from './lib/months'
+import { labelYm, longLabelYm } from './lib/months'
 import type { Manifest } from './lib/types'
 import { initialState, reducer, type AppState } from './state/appState'
 
@@ -3023,16 +3605,37 @@ export default function App() {
   return <Explorer manifest={manifest} overview={overview} reported={reported} />
 }
 
+type Side = 'left' | 'right'
+
+interface Panel extends FeatureBox {
+  side: Side
+  title: string
+  wide?: boolean
+  /** One sentence for the guide. */
+  guide: string
+  body: () => ReactNode
+}
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`
+
 function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<ReturnType<typeof useDataset>, 'overview' | 'reported'>) {
   const [s, dispatch] = useReducer(reducer, m, (mm): AppState => {
     const init = initialState(mm)
     return mm.presets[0] ? { ...init, area: areaFromPreset(mm.presets[0]) } : init
   })
+
   const data = useAreaData(dataSource, m, s.area)
   const [drawError, setDrawError] = useState<string | null>(null)
+  const [panel, setPanel] = useState<string | null>(null)
+  // What each drawer shows. Kept after closing so the drawer slides out with its content.
+  const [shown, setShown] = useState<Record<Side, string | null>>({ left: null, right: s.view === 'about' ? 'about' : null })
+  const [more, setMore] = useState(false)
+  const [guide, setGuide] = useState(() => !guideSeen())
+
   const series = data.series
   const i0 = series ? series.months.indexOf(s.from) : -1
   const i1 = series ? series.months.indexOf(s.to) : -1
+  const values = useMemo(() => series?.values[s.source] ?? [], [series, s.source])
 
   const { cells, mapScale } = useMemo(() => {
     if (!data.selection || i0 < 0) return { cells: EMPTY_FC, mapScale: null }
@@ -3042,76 +3645,141 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   }, [data.selection, s.source, i0, i1, s.palette, m.grid_deg])
   const overviewFc = useMemo(() => (overview ? overviewToFeatures(overview, s.palette) : EMPTY_FC), [overview, s.palette])
 
+  const focus = series ? summarizeMonth(values, series.months, s.to, m.baseline_years) : null
+
+  const panels: Panel[] = [
+    { id: 'area', side: 'left', label: 'Area', icon: <MapPin aria-hidden />, title: 'Choose an area',
+      guide: 'Pick a preset region, draw a circle, box or any shape on the globe, or type coordinates.',
+      body: () => <>
+        <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
+          onTool={(tool) => dispatch({ type: 'setTool', tool })}
+          onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
+        <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
+      </> },
+    { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
+      guide: 'Switch between the harmonized record and raw MODIS or VIIRS, and change colours, imagery and labels.',
+      body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
+        onSource={(source) => dispatch({ type: 'setSource', source })}
+        onScaleTo={(scaleTo) => dispatch({ type: 'setScaleTo', scaleTo })}
+        onPalette={(palette) => dispatch({ type: 'setPalette', palette })}
+        onBasemap={(basemap) => dispatch({ type: 'setBasemap', basemap })}
+        onLabels={(labels) => dispatch({ type: 'setLabels', labels })} /> },
+  ]
+  const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
+    guide: '', body: () => <AboutPage manifest={m} /> }
+  const openId = s.view === 'about' ? 'about' : panel
+  const byId = (id: string | null) => [...panels, about].find((p) => p.id === id) ?? null
+
+  const closePanel = useCallback(() => {
+    if (s.view === 'about') { dispatch({ type: 'setView', view: 'explore' }); return }
+    const id = panel
+    setPanel(null)
+    if (id) document.querySelector<HTMLElement>(`[data-tour="box-${id}"]`)?.focus()
+  }, [panel, s.view])
+  const togglePanel = (id: string) => {
+    if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
+    const p = byId(id)
+    if (p) setShown((sh) => ({ ...sh, [p.side]: id }))
+    setPanel((cur) => (cur === id ? null : id))
+  }
+  const toggleAbout = () => {
+    setPanel(null)
+    setShown((sh) => ({ ...sh, right: 'about' }))
+    dispatch({ type: 'setView', view: s.view === 'about' ? 'explore' : 'about' })
+  }
+
+  const guideSteps: GuideStep[] = [
+    { target: null, title: 'Welcome', text: 'This globe shows where satellites detected fire hotspots, from 2000 to now. Colours show how many, for the area and months you choose.' },
+    ...panels.map((p) => ({ target: `box-${p.id}`, title: p.label, text: p.guide })),
+    { target: 'strip', title: 'Legend and summary', text: 'What the colours mean. Press More info for the verdict: is the latest month unusual for this area?' },
+    { target: 'guide', title: 'Guide', text: 'Open this guide again any time.' },
+  ]
+  const closeGuide = () => { markGuideSeen(); setGuide(false) }
+
+  const selection = `${s.area?.label ?? 'No area'}, ${labelYm(s.from)} – ${labelYm(s.to)}`
+  const headline: ReactNode = !s.area ? 'Choose an area to begin.'
+    : data.coverage === 'none' ? 'No data is loaded for this area yet.'
+    : !focus || focus.value === null ? `${s.area.label}: loading…`
+    : <><strong>{longLabelYm(s.to)}</strong>: {Math.round(focus.value).toLocaleString('en-GB')} hotspots
+        {focus.verdict && focus.percentile !== null && <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile)</>}</>
+
   return (
-    <div className="app">
+    <div className={m.mock ? 'app has-banner' : 'app'}>
       <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
-      <Header view={s.view} onView={(view) => dispatch({ type: 'setView', view })} />
-      {s.view === 'about' ? <AboutPage manifest={m} /> : (
-        <main className="explore" id="main">
-          <aside className="controls" aria-label="Choose an area and months">
-            <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
-              onTool={(tool) => dispatch({ type: 'setTool', tool })}
-              onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
-          </aside>
-          <section className="map-col" aria-label="Map">
-            <div className="globe-wrap">
-              <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-                onDrawn={(area) => {
-                  const err = validateDrawn(area)
-                  setDrawError(err)
-                  dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
-                }} />
-            </div>
-            {mapScale && <Legend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} to ${labelYm(s.to)} (bins fit these months)`} />}
-            <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
-          </section>
-          <section className="results" id="results" aria-label="Results" tabIndex={-1}>
-            <p className="muted">The burning calendar arrives at checkpoint 3.</p>
-          </section>
-        </main>
-      )}
-      <Footer />
+      <TopBar selection={selection} onSelectionClick={() => togglePanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
+      <main id="main" tabIndex={-1}>
+        <div className="rails">
+          <FeatureRail side="left" label="Choose what to show" boxes={panels.filter((p) => p.side === 'left')} open={panel} onToggle={togglePanel} />
+          <FeatureRail side="right" label="Analysis" boxes={panels.filter((p) => p.side === 'right')} open={panel} onToggle={togglePanel} />
+        </div>
+        {(['left', 'right'] as const).map((side) => {
+          const p = byId(shown[side])
+          return p && (
+            <Drawer key={side} open={openId === p.id} side={side} wide={p.wide} title={p.title} onClose={closePanel}>{p.body()}</Drawer>
+          )
+        })}
+        <div className="map-full">
+          <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
+            onDrawn={(area) => {
+              const err = validateDrawn(area)
+              setDrawError(err)
+              dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+            }} />
+        </div>
+      </main>
+      <BottomStrip expanded={more} onToggle={() => setMore((x) => !x)} headline={headline}
+        legend={mapScale
+          ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
+          : <span className="small muted">Choose an area to colour the globe.</span>}
+        more={<>
+          <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
+          <p className="small muted">Colours show satellite hotspot detections, not fires or burned area. They are rebuilt for the months you choose, so the full ramp is always used.</p>
+        </>} />
+      {guide && <GuideTour steps={guideSteps} onClose={closeGuide} />}
     </div>
   )
 }
 ```
 
-- [ ] **Step 2: Typecheck, test, lint**
+- [ ] **Step 6: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: no tsc output; `Tests  49 passed (49)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
+Expected: no tsc output; `Tests  55 passed (55)`; oxlint shows warnings only (React advice about refs and setState-in-effect), no errors.
 
-- [ ] **Step 3: Run it and check by hand**
+- [ ] **Step 7: Run it and check by hand**
 
-Run: `npm run dev` and open the printed URL (keep the tab in front).
-Check:
-- [ ] The red "MOCK DATA, NOT REAL" banner shows.
-- [ ] The globe shows Blue Marble imagery and flies to "Southern Africa savanna (mock)", whose cells are coloured with a yellow outline.
-- [ ] The preset dropdown, set to "United Kingdom (mock)", flies to the UK.
-- [ ] Circle: drag on the globe and the summary reads "Drawn circle: … km²". Do the same with Rectangle, Polygon and Freehand.
-- [ ] Zoom out fully and draw a huge circle: a red message explains the size limit, and the area does not change.
-- [ ] "Or type coordinates": West `5`, East `1` shows the 180° message; a valid box works; Point + radius works.
-- [ ] A box over South America says "No data is loaded for this area yet".
-- [ ] "About & methods" opens, "Explore" comes back.
+Run: `npm run dev` and open the printed URL (keep the tab in front; background tabs don't draw WebGL).
+- [ ] First visit: the guide opens ("Step 1 of 5"); Next walks through Area, Layers, the strip and Guide; Done closes it. A reload doesn't show it again; the Guide button does.
+- [ ] The globe fills the screen with Blue Marble imagery, country borders and names; a red "MOCK DATA, NOT REAL" bar on top; credits in the bottom strip.
+- [ ] The first preset loads: the top pill shows "Southern Africa savanna (mock), Nov 2000 – Oct 2026", coloured cells with a white outline, and the strip shows "October 2026: … hotspots · Above typical (…th percentile)".
+- [ ] Area box: the drawer slides in from the left. Choose "United Kingdom (mock)": the globe flies there and the pill updates.
+- [ ] With the Area drawer open, draw on the visible globe: Circle (drag), Rectangle (drag), Polygon (click corners, then the first point), Freehand (click, move around, click). Each sets "Drawn …" in the pill.
+- [ ] Zoom right out and draw a huge circle: a red message explains the size limit and the area doesn't change.
+- [ ] "Or type coordinates": West `5`, East `1` explains the 180° line; a valid box works; Point + radius works; a box over South America makes the strip say "No data is loaded for this area yet".
+- [ ] Esc closes the drawer, which slides back out the way it came, and focus returns to the Area box. Clicking another box while a drawer is closing turns it around smoothly.
+- [ ] Layers box: night imagery and the borders/labels switch work.
+- [ ] About (round i button) opens on the right and closes.
+- [ ] More info expands the strip with the area summary.
+- [ ] Phone width (DevTools device mode): all boxes in one scrollable row above the strip, Guide and About visible, nothing overflows sideways; drawers open as sheets.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/App.tsx
-git commit -m "demo: checkpoint 2, globe with four ways to choose an area"
+git add src/components/shell src/App.tsx
+git commit -m "demo: checkpoint 2, map-first shell with drawers, bottom strip and guide"
 ```
 
-#### ✅ CHECKPOINT 2: Globe and area. Stop and review with Aziz
-Show the check list above live. Agree the look (brand colours, layout) before building more on it. Add a row to `docs/AI_USE.md`. Tag `cp2-globe`.
+#### ✅ CHECKPOINT 2: Map-first shell and area selection. Stop and review with Aziz
+Show the check list above live. Agree the look before building more on it. Add a row to `docs/AI_USE.md`. Tag `cp2-globe`.
 
 ---
 
-### Checkpoint 3: Months, display options and the burning calendar
+### Checkpoint 3: Months and the burning calendar
 
-### Task 14: Month range and display options
+### Task 14: Month range
 
-**Files:** Create `src/components/TimeRangePicker.tsx`, `src/components/TimeRangePicker.test.tsx`, `src/components/DisplayOptions.tsx`
+**Files:** Create `src/components/TimeRangePicker.tsx`, `src/components/TimeRangePicker.test.tsx`
 
 - [ ] **Step 1: Write the failing test** `src/components/TimeRangePicker.test.tsx`
 
@@ -3150,9 +3818,8 @@ describe('TimeRangePicker', () => {
 Run: `npx vitest run src/components/TimeRangePicker.test.tsx`
 Expected: FAIL, `Failed to resolve import "./TimeRangePicker"`.
 
-- [ ] **Step 3: Implement**
+- [ ] **Step 3: Implement `src/components/TimeRangePicker.tsx`**
 
-`src/components/TimeRangePicker.tsx`
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { useId } from 'react'
@@ -3195,8 +3862,7 @@ function MonthSelect({ label, value, first, last, onChange }: {
 
 export function TimeRangePicker({ first, last, from, to, quick, onChange }: TimeRangePickerProps) {
   return (
-    <fieldset>
-      <legend>2. Choose months</legend>
+    <div>
       <div className="row">
         <MonthSelect label="From" value={from} first={first} last={last} onChange={(ym) => onChange(ym, to)} />
         <MonthSelect label="To" value={to} first={first} last={last} onChange={(ym) => onChange(from, ym)} />
@@ -3209,64 +3875,7 @@ export function TimeRangePicker({ first, last, from, to, quick, onChange }: Time
         ))}
       </div>
       <p className="small muted">All months are UTC. Colours rescale to the months you choose.</p>
-    </fieldset>
-  )
-}
-```
-
-`src/components/DisplayOptions.tsx`
-```tsx
-// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import { PALETTES, type PaletteId } from '../lib/colorScale'
-import { SERIES_KEYS, SERIES_LABELS, type SeriesKey } from '../lib/types'
-import type { ScaleTo } from '../state/appState'
-import type { Basemap } from './GlobeMap'
-
-export interface DisplayOptionsProps {
-  source: SeriesKey
-  scaleTo: ScaleTo
-  palette: PaletteId
-  basemap: Basemap
-  labels: boolean
-  onSource: (s: SeriesKey) => void
-  onScaleTo: (s: ScaleTo) => void
-  onPalette: (p: PaletteId) => void
-  onBasemap: (b: Basemap) => void
-  onLabels: (l: boolean) => void
-}
-
-export function DisplayOptions(p: DisplayOptionsProps) {
-  return (
-    <fieldset>
-      <legend>3. Display</legend>
-      <fieldset>
-        <legend className="small">Data</legend>
-        {SERIES_KEYS.map((k) => (
-          <label key={k}>
-            <input type="radio" name="source" checked={p.source === k} onChange={() => p.onSource(k)} /> {SERIES_LABELS[k]}
-          </label>
-        ))}
-      </fieldset>
-      <fieldset>
-        <legend className="small">Calendar colours scaled to</legend>
-        <label><input type="radio" name="scale" checked={p.scaleTo === 'range'} onChange={() => p.onScaleTo('range')} /> The months I chose</label>
-        <label><input type="radio" name="scale" checked={p.scaleTo === 'record'} onChange={() => p.onScaleTo('record')} /> The whole record</label>
-      </fieldset>
-      <label>
-        Colour ramp
-        <select value={p.palette} onChange={(e) => p.onPalette(e.target.value as PaletteId)}>
-          {(Object.keys(PALETTES) as PaletteId[]).map((id) => <option key={id} value={id}>{PALETTES[id].label}</option>)}
-        </select>
-      </label>
-      <label>
-        Globe imagery
-        <select value={p.basemap} onChange={(e) => p.onBasemap(e.target.value as Basemap)}>
-          <option value="day">Blue Marble (day)</option>
-          <option value="night">Black Marble (night lights)</option>
-        </select>
-      </label>
-      <label><input type="checkbox" checked={p.labels} onChange={(e) => p.onLabels(e.target.checked)} /> Coastlines</label>
-    </fieldset>
+    </div>
   )
 }
 ```
@@ -3279,8 +3888,8 @@ Expected: `Tests  2 passed (2)`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/components/TimeRangePicker.tsx src/components/TimeRangePicker.test.tsx src/components/DisplayOptions.tsx
-git commit -m "demo: month range picker with quick ranges, display options"
+git add src/components/TimeRangePicker.tsx src/components/TimeRangePicker.test.tsx
+git commit -m "demo: month range picker with quick ranges"
 ```
 
 ### Task 15: Burning calendar
@@ -3520,26 +4129,32 @@ git add src/components/BurningCalendar.tsx src/components/BurningCalendar.test.t
 git commit -m "demo: accessible burning calendar with keyboard navigation and table view"
 ```
 
-### Task 16: Wire App (Checkpoint 3 version)
+### Task 16: App (Checkpoint 3 version)
 
 **Files:** Replace `src/App.tsx`
 
-- [ ] **Step 1: Replace `src/App.tsx`**
+- [ ] **Step 1: Replace `src/App.tsx`** (adds the Dates and Calendar boxes)
 
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// Checkpoint 3 version: adds months, display options and the burning calendar. Replaced at checkpoint 4.
-import { useEffect, useMemo, useReducer, useState } from 'react'
+// Checkpoint 3 version: adds Dates and Calendar. Replaced at checkpoint 4.
+// Map-first layout: the globe fills the screen; feature boxes around it open side drawers;
+// the bottom strip holds the legend, a one-line verdict and "More info".
+import { CalendarBlank, Info, MapPin, Stack, Table } from '@phosphor-icons/react'
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
 import { AboutPage } from './components/AboutPage'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
 import { BurningCalendar } from './components/BurningCalendar'
 import { DisplayOptions } from './components/DisplayOptions'
-import { Footer } from './components/Footer'
 import { GlobeMap } from './components/GlobeMap'
-import { Header } from './components/Header'
-import { Legend } from './components/Legend'
+import { CompactLegend, Legend } from './components/Legend'
 import { MockBanner } from './components/MockBanner'
+import { BottomStrip } from './components/shell/BottomStrip'
+import { Drawer } from './components/shell/Drawer'
+import { FeatureRail, type FeatureBox } from './components/shell/FeatureRail'
+import { GuideTour, guideSeen, markGuideSeen, type GuideStep } from './components/shell/GuideTour'
+import { TopBar } from './components/shell/TopBar'
 import { TimeRangePicker } from './components/TimeRangePicker'
 import { RAMP } from './config'
 import { dataSource } from './dataSource'
@@ -3548,9 +4163,9 @@ import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
-import { summarizeMonth } from './lib/indices'
+import { summarizeMonth, VERDICT_LABELS } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
-import { labelYm, type YearMonth } from './lib/months'
+import { labelYm, longLabelYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
 import { SERIES_LABELS, type Manifest } from './lib/types'
 import { initialState, quickRanges, reducer, type AppState } from './state/appState'
@@ -3562,14 +4177,33 @@ export default function App() {
   return <Explorer manifest={manifest} overview={overview} reported={reported} />
 }
 
+type Side = 'left' | 'right'
+
+interface Panel extends FeatureBox {
+  side: Side
+  title: string
+  wide?: boolean
+  /** One sentence for the guide. */
+  guide: string
+  body: () => ReactNode
+}
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`
+
 function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<ReturnType<typeof useDataset>, 'overview' | 'reported'>) {
   const [s, dispatch] = useReducer(reducer, m, (mm): AppState => {
     const init = initialState(mm)
     return mm.presets[0] ? { ...init, area: areaFromPreset(mm.presets[0]) } : init
   })
+
   const data = useAreaData(dataSource, m, s.area)
   const [drawError, setDrawError] = useState<string | null>(null)
   const [hoverMonth, setHoverMonth] = useState<YearMonth | null>(null)
+  const [panel, setPanel] = useState<string | null>(null)
+  // What each drawer shows. Kept after closing so the drawer slides out with its content.
+  const [shown, setShown] = useState<Record<Side, string | null>>({ left: null, right: s.view === 'about' ? 'about' : null })
+  const [more, setMore] = useState(false)
+  const [guide, setGuide] = useState(() => !guideSeen())
   useEffect(() => setHoverMonth(null), [s.area, s.source])
 
   const series = data.series
@@ -3577,6 +4211,7 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const i1 = series ? series.months.indexOf(s.to) : -1
   const values = useMemo(() => series?.values[s.source] ?? [], [series, s.source])
   const seriesLabel = SERIES_LABELS[s.source]
+  const ready = !!series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
 
   const calendarScale = useMemo(() => buildCountScale(
     s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values,
@@ -3589,62 +4224,115 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
     const scale = buildCountScale(totals.map((t) => t.total), { ...RAMP, palette: s.palette })
     return { cells: cellsToFeatures(totals, m.grid_deg, scale), mapScale: scale }
   }, [data.selection, s.source, i0, i1, s.palette, m.grid_deg])
-
   const overviewFc = useMemo(() => (overview ? overviewToFeatures(overview, s.palette) : EMPTY_FC), [overview, s.palette])
 
-  const showResults = series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
+  const focus = series ? summarizeMonth(values, series.months, s.to, m.baseline_years) : null
+  const needsArea = <p className="muted">Choose an area with data first (Area box on the left).</p>
+
+  const panels: Panel[] = [
+    { id: 'area', side: 'left', label: 'Area', icon: <MapPin aria-hidden />, title: 'Choose an area',
+      guide: 'Pick a preset region, draw a circle, box or any shape on the globe, or type coordinates.',
+      body: () => <>
+        <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
+          onTool={(tool) => dispatch({ type: 'setTool', tool })}
+          onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
+        <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
+      </> },
+    { id: 'dates', side: 'left', label: 'Dates', icon: <CalendarBlank aria-hidden />, title: 'Choose months',
+      guide: 'Choose the months to look at. Colours rescale to the months you pick.',
+      body: () => <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
+        quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} /> },
+    { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
+      guide: 'Switch between the harmonized record and raw MODIS or VIIRS, and change colours, imagery and labels.',
+      body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
+        onSource={(source) => dispatch({ type: 'setSource', source })}
+        onScaleTo={(scaleTo) => dispatch({ type: 'setScaleTo', scaleTo })}
+        onPalette={(palette) => dispatch({ type: 'setPalette', palette })}
+        onBasemap={(basemap) => dispatch({ type: 'setBasemap', basemap })}
+        onLabels={(labels) => dispatch({ type: 'setLabels', labels })} /> },
+    { id: 'calendar', side: 'right', wide: true, label: 'Calendar', icon: <Table aria-hidden />, title: 'Burning calendar',
+      guide: 'Every month since 2000 as a grid: which seasons and which years had the most hotspots.',
+      body: () => !ready ? needsArea : <>
+        <Legend id="cal-legend" scale={calendarScale} showNrt
+          title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
+        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
+          statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
+          legendId="cal-legend" onFocusMonth={setHoverMonth} />
+        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
+      </> },
+  ]
+  const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
+    guide: '', body: () => <AboutPage manifest={m} /> }
+  const openId = s.view === 'about' ? 'about' : panel
+  const byId = (id: string | null) => [...panels, about].find((p) => p.id === id) ?? null
+
+  const closePanel = useCallback(() => {
+    if (s.view === 'about') { dispatch({ type: 'setView', view: 'explore' }); return }
+    const id = panel
+    setPanel(null)
+    if (id) document.querySelector<HTMLElement>(`[data-tour="box-${id}"]`)?.focus()
+  }, [panel, s.view])
+  const togglePanel = (id: string) => {
+    if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
+    const p = byId(id)
+    if (p) setShown((sh) => ({ ...sh, [p.side]: id }))
+    setPanel((cur) => (cur === id ? null : id))
+  }
+  const toggleAbout = () => {
+    setPanel(null)
+    setShown((sh) => ({ ...sh, right: 'about' }))
+    dispatch({ type: 'setView', view: s.view === 'about' ? 'explore' : 'about' })
+  }
+
+  const guideSteps: GuideStep[] = [
+    { target: null, title: 'Welcome', text: 'This globe shows where satellites detected fire hotspots, from 2000 to now. Colours show how many, for the area and months you choose.' },
+    ...panels.map((p) => ({ target: `box-${p.id}`, title: p.label, text: p.guide })),
+    { target: 'strip', title: 'Legend and summary', text: 'What the colours mean. Press More info for the verdict: is the latest month unusual for this area?' },
+    { target: 'guide', title: 'Guide', text: 'Open this guide again any time.' },
+  ]
+  const closeGuide = () => { markGuideSeen(); setGuide(false) }
+
+  const selection = `${s.area?.label ?? 'No area'}, ${labelYm(s.from)} – ${labelYm(s.to)}`
+  const headline: ReactNode = !s.area ? 'Choose an area to begin.'
+    : data.coverage === 'none' ? 'No data is loaded for this area yet.'
+    : !focus || focus.value === null ? `${s.area.label}: loading…`
+    : <><strong>{longLabelYm(s.to)}</strong>: {Math.round(focus.value).toLocaleString('en-GB')} hotspots
+        {focus.verdict && focus.percentile !== null && <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile)</>}</>
 
   return (
-    <div className="app">
+    <div className={m.mock ? 'app has-banner' : 'app'}>
       <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
-      <Header view={s.view} onView={(view) => dispatch({ type: 'setView', view })} />
-      {s.view === 'about' ? <AboutPage manifest={m} /> : (
-        <main className="explore" id="main">
-          <aside className="controls" aria-label="Choose an area and months">
-            <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
-              onTool={(tool) => dispatch({ type: 'setTool', tool })}
-              onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
-            <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
-              quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} />
-            <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
-              onSource={(source) => dispatch({ type: 'setSource', source })}
-              onScaleTo={(scaleTo) => dispatch({ type: 'setScaleTo', scaleTo })}
-              onPalette={(palette) => dispatch({ type: 'setPalette', palette })}
-              onBasemap={(basemap) => dispatch({ type: 'setBasemap', basemap })}
-              onLabels={(labels) => dispatch({ type: 'setLabels', labels })} />
-          </aside>
-          <section className="map-col" aria-label="Map">
-            <div className="globe-wrap">
-              <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-                onDrawn={(area) => {
-                  const err = validateDrawn(area)
-                  setDrawError(err)
-                  dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
-                }} />
-            </div>
-            {mapScale && <Legend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} to ${labelYm(s.to)} (bins fit these months)`} />}
-            <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
-          </section>
-          <section className="results" id="results" aria-label="Results" tabIndex={-1}>
-            {!showResults ? <p className="muted">Results appear here once an area with data is chosen.</p> : (
-              <>
-                <section className="card" id="calendar" aria-labelledby="cal-title">
-                  <header><h2 id="cal-title">Burning calendar</h2></header>
-                  <Legend id="cal-legend" scale={calendarScale} showNrt
-                    title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
-                  <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
-                    statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
-                    legendId="cal-legend" onFocusMonth={setHoverMonth} />
-                  <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
-                </section>
-                <p className="muted">Summary, charts and download arrive at checkpoint 4.</p>
-              </>
-            )}
-          </section>
-        </main>
-      )}
-      <Footer />
+      <TopBar selection={selection} onSelectionClick={() => togglePanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
+      <main id="main" tabIndex={-1}>
+        <div className="rails">
+          <FeatureRail side="left" label="Choose what to show" boxes={panels.filter((p) => p.side === 'left')} open={panel} onToggle={togglePanel} />
+          <FeatureRail side="right" label="Analysis" boxes={panels.filter((p) => p.side === 'right')} open={panel} onToggle={togglePanel} />
+        </div>
+        {(['left', 'right'] as const).map((side) => {
+          const p = byId(shown[side])
+          return p && (
+            <Drawer key={side} open={openId === p.id} side={side} wide={p.wide} title={p.title} onClose={closePanel}>{p.body()}</Drawer>
+          )
+        })}
+        <div className="map-full">
+          <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
+            onDrawn={(area) => {
+              const err = validateDrawn(area)
+              setDrawError(err)
+              dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+            }} />
+        </div>
+      </main>
+      <BottomStrip expanded={more} onToggle={() => setMore((x) => !x)} headline={headline}
+        legend={mapScale
+          ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
+          : <span className="small muted">Choose an area to colour the globe.</span>}
+        more={<>
+          <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
+          <p className="small muted">Colours show satellite hotspot detections, not fires or burned area. They are rebuilt for the months you choose, so the full ramp is always used.</p>
+        </>} />
+      {guide && <GuideTour steps={guideSteps} onClose={closeGuide} />}
     </div>
   )
 }
@@ -3668,22 +4356,20 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck and test**
 
 Run: `npx tsc -b && npm test`
-Expected: `Tests  55 passed (55)`
+Expected: `Tests  61 passed (61)`
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
-- [ ] The calendar shows years 2000 to 2026. Nov 2026 has a yellow outline (month to date). Jul to Oct 2026 have dotted borders (NRT). Nov 2000 to Feb 2001 for "VIIRS S-NPP only" are hatched.
-- [ ] "Last 5 years": the calendar shrinks to 2022 to 2026, the legend edges change, and the map colours change. **This is the "colours relative to the time range" requirement.**
-- [ ] "Calendar colours scaled to: whole record" makes recent years look different again.
-- [ ] Tab into the calendar, then use the arrow keys: the focus moves and the detail line updates.
-- [ ] "Show numbers in cells" prints the values.
-- [ ] Switch the data to MODIS, then to VIIRS S-NPP: the values change and pre-2012 VIIRS cells are hatched.
-- [ ] The colour ramp setting switches inferno and cividis.
+- [ ] The guide now has 7 steps (Dates and Calendar added).
+- [ ] Calendar box: the drawer slides in from the right with the full table: years 2000 to 2026, year totals, the median row. Nov 2026 has a yellow outline (month to date); Jul to Oct 2026 have dotted borders (NRT).
+- [ ] Dates box, "Last 5 years": the calendar shrinks to 2022 to 2026, its legend edges change, and the map colours and the strip legend change. **This is the "colours relative to the time range" requirement.**
+- [ ] Layers box, "Calendar colours scaled to: the whole record": recent years look different again. Switch the data to MODIS, then VIIRS S-NPP: values change and pre-2012 VIIRS cells are hatched. Inferno and cividis both work.
+- [ ] Tab into the calendar and use the arrow keys: focus moves and the detail line updates. "Show numbers in cells" prints the values.
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add src/App.tsx
-git commit -m "demo: checkpoint 3, months, display options and burning calendar"
+git commit -m "demo: checkpoint 3, months and burning calendar"
 ```
 
 #### ✅ CHECKPOINT 3: Calendar and colour ramps. Stop and review with Aziz
@@ -3776,7 +4462,7 @@ export function KpiRow(p: KpiRowProps) {
           <div className="small muted">{longLabelYm(f.month)} ({STATUS_LABELS[p.focusStatus]})</div>
           <div className="value">{f.value === null ? 'n/a' : fmtCount(f.value)}</div>
           {f.verdict && f.percentile !== null
-            ? <div><span className="verdict">{VERDICT_LABELS[f.verdict]}</span> <span className="small">{ordinal(Math.round(f.percentile))} percentile of {n} {calName}s</span></div>
+            ? <div><span className={`verdict verdict-${f.verdict}`}>{VERDICT_LABELS[f.verdict]}</span> <span className="small">{ordinal(Math.round(f.percentile))} percentile of {n} {calName}s</span></div>
             : <div className="small">Not enough baseline years to compare.</div>}
         </div>
         <div className="kpi">
@@ -3826,20 +4512,29 @@ git commit -m "demo: summary cards with verdict, anomaly, year to date and rank"
 `src/components/PlotFigure.tsx`
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// Renders an Observable Plot chart inside React. Plot builds plain SVG; we swap it on every change.
-import { useEffect, useRef } from 'react'
+// Renders an Observable Plot chart inside React at the width of its container (drawers vary in width).
+import { useEffect, useRef, useState } from 'react'
 
-export function PlotFigure({ make, label }: { make: () => SVGSVGElement | HTMLElement; label: string }) {
+export function PlotFigure({ make, label }: { make: (width: number) => SVGSVGElement | HTMLElement; label: string }) {
   const ref = useRef<HTMLDivElement>(null)
+  const [width, setWidth] = useState(0)
   useEffect(() => {
-    const el = make()
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => setWidth(Math.floor(entry.contentRect.width)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  useEffect(() => {
+    if (width < 50) return
+    const el = make(width)
     // Plot labels inner <g> groups; inside role="img" those labels are invalid ARIA. The figure label covers it.
     el.querySelectorAll('[aria-label]').forEach((n) => n.removeAttribute('aria-label'))
     el.setAttribute('role', 'img')
     el.setAttribute('aria-label', label)
     ref.current?.replaceChildren(el)
     return () => el.remove()
-  }, [make, label])
+  }, [make, label, width])
   return <div className="figure" ref={ref} />
 }
 ```
@@ -3860,11 +4555,10 @@ export interface SeasonalChartProps {
   focusYear: number
   baselineYears: [number, number]
   seriesLabel: string
-  width?: number
 }
 
-export function SeasonalChart({ months, values, focusYear, baselineYears, seriesLabel, width = 860 }: SeasonalChartProps) {
-  const make = useCallback(() => {
+export function SeasonalChart({ months, values, focusYear, baselineYears, seriesLabel }: SeasonalChartProps) {
+  const make = useCallback((width: number) => {
     const bands = Array.from({ length: 12 }, (_, i) => {
       const b = sameMonthBaseline(values, months, i + 1, baselineYears, focusYear)
       return b ? { m: i + 1, p10: b.p10, p25: b.p25, med: b.median, p75: b.p75, p90: b.p90 } : null
@@ -3877,27 +4571,27 @@ export function SeasonalChart({ months, values, focusYear, baselineYears, series
     const prev = yearLine(focusYear - 1)
     return Plot.plot({
       width, height: 320, marginLeft: 56,
-      style: { background: 'transparent', color: '#ffffff', fontSize: '12px' },
+      style: { background: 'transparent', color: 'rgba(235,235,245,0.85)', fontSize: '12px', fontFamily: 'inherit' },
       x: { domain: [1, 12], ticks: 12, tickFormat: (m: number) => MONTH_SHORT[m - 1], label: null },
       y: { grid: true, label: 'Hotspots detected', zero: true },
       marks: [
-        Plot.areaY(bands, { x: 'm', y1: 'p10', y2: 'p90', fill: '#2e96f5', fillOpacity: 0.2, curve: 'monotone-x' }),
-        Plot.areaY(bands, { x: 'm', y1: 'p25', y2: 'p75', fill: '#2e96f5', fillOpacity: 0.4, curve: 'monotone-x' }),
+        Plot.areaY(bands, { x: 'm', y1: 'p10', y2: 'p90', fill: '#409cff', fillOpacity: 0.18, curve: 'monotone-x' }),
+        Plot.areaY(bands, { x: 'm', y1: 'p25', y2: 'p75', fill: '#409cff', fillOpacity: 0.36, curve: 'monotone-x' }),
         Plot.line(bands, { x: 'm', y: 'med', stroke: '#ffffff', strokeDasharray: '5,4', curve: 'monotone-x' }),
-        Plot.line(prev, { x: 'm', y: 'v', stroke: '#c9d3ea', strokeWidth: 1, strokeOpacity: 0.7, curve: 'monotone-x' }),
-        Plot.line(focus, { x: 'm', y: 'v', stroke: '#eafe07', strokeWidth: 2.5, curve: 'monotone-x' }),
-        Plot.dot(focus, { x: 'm', y: 'v', fill: '#eafe07', r: 3.5, tip: true, title: (d: { m: number; v: number }) => `${MONTH_SHORT[d.m - 1]} ${focusYear}: ${Math.round(d.v)}` }),
-        Plot.text(focus.slice(-1), { x: 'm', y: 'v', text: () => String(focusYear), dx: 8, textAnchor: 'start', fill: '#eafe07', fontWeight: 700 }),
+        Plot.line(prev, { x: 'm', y: 'v', stroke: 'rgba(235,235,245,0.55)', strokeWidth: 1, curve: 'monotone-x' }),
+        Plot.line(focus, { x: 'm', y: 'v', stroke: '#ff9f0a', strokeWidth: 2.5, curve: 'monotone-x' }),
+        Plot.dot(focus, { x: 'm', y: 'v', fill: '#ff9f0a', r: 3.5, tip: true, title: (d: { m: number; v: number }) => `${MONTH_SHORT[d.m - 1]} ${focusYear}: ${Math.round(d.v)}` }),
+        Plot.text(focus.slice(-1), { x: 'm', y: 'v', text: () => String(focusYear), dx: 8, textAnchor: 'start', fill: '#ff9f0a', fontWeight: 700 }),
       ],
     })
-  }, [months, values, focusYear, baselineYears, width])
+  }, [months, values, focusYear, baselineYears])
   const [y0, y1] = baselineYears
   return (
     <figure className="card" id="seasons">
       <header><h2>{focusYear} against a typical year</h2></header>
       <PlotFigure make={make} label={`Line chart of monthly hotspots in ${focusYear} against the ${y0} to ${y1} median and ranges.`} />
       <figcaption className="caption">
-        Yellow: {focusYear}. Grey: {focusYear - 1}. Dashed white: median of {y0} to {y1} (leaving out {focusYear}).
+        Orange: {focusYear}. Grey: {focusYear - 1}. Dashed white: median of {y0} to {y1} (leaving out {focusYear}).
         Dark band: middle 50% of years. Light band: middle 80% of years. {seriesLabel}.
       </figcaption>
     </figure>
@@ -3923,15 +4617,14 @@ export interface AnomalyChartProps {
   i1: number
   baselineYears: [number, number]
   seriesLabel: string
-  width?: number
 }
 
 const CLIP = 200
 const toDate = (ym: YearMonth) => new Date(`${ym}-01T00:00:00Z`)
 
-export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabel, width = 860 }: AnomalyChartProps) {
+export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabel }: AnomalyChartProps) {
   const [reference, setReference] = useState<'mean' | 'median'>('mean')
-  const make = useCallback(() => {
+  const make = useCallback((width: number) => {
     const data = monthlyAnomalies(values, months, i0, i1, baselineYears, reference).map((a) => ({
       ...a,
       start: toDate(a.month),
@@ -3941,7 +4634,7 @@ export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabe
     }))
     return Plot.plot({
       width, height: 300, marginLeft: 56,
-      style: { background: 'transparent', color: '#ffffff', fontSize: '12px' },
+      style: { background: 'transparent', color: 'rgba(235,235,245,0.85)', fontSize: '12px', fontFamily: 'inherit' },
       x: { type: 'utc', label: null },
       y: { label: `% vs ${reference === 'mean' ? 'average' : 'median'}`, grid: true, domain: [-100, CLIP] },
       marks: [
@@ -3952,7 +4645,7 @@ export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabe
         Plot.ruleY([0], { stroke: '#ffffff' }),
       ],
     })
-  }, [months, values, i0, i1, baselineYears, reference, width])
+  }, [months, values, i0, i1, baselineYears, reference])
   const [y0, y1] = baselineYears
   return (
     <figure className="card" id="anomalies">
@@ -4040,18 +4733,18 @@ export function yearlyTotals(s: AreaSeries): Row[] {
   return rows.sort((a, b) => a.year - b.year)
 }
 
-export function OverlapChart({ series, width = 860 }: { series: AreaSeries; width?: number }) {
-  const make = useCallback(() => {
+export function OverlapChart({ series }: { series: AreaSeries }) {
+  const make = useCallback((width: number) => {
     const rows = yearlyTotals(series)
     const keys = Object.keys(STYLE).filter((k) => rows.some((r) => r.key === k))
     return Plot.plot({
       width, height: 360, marginLeft: 64, marginRight: 20,
-      style: { background: 'transparent', color: '#ffffff', fontSize: '12px' },
+      style: { background: 'transparent', color: 'rgba(235,235,245,0.85)', fontSize: '12px', fontFamily: 'inherit' },
       x: { label: null, tickFormat: 'd' },
       y: { label: 'Hotspots detected per year', grid: true, zero: true },
       marks: [
-        Plot.ruleX([2012], { stroke: '#c9d3ea', strokeDasharray: '3,3' }),
-        Plot.text([2012], { x: (d: number) => d, frameAnchor: 'top', dy: 6, dx: 4, textAnchor: 'start', text: () => 'VIIRS S-NPP starts', fill: '#c9d3ea' }),
+        Plot.ruleX([2012], { stroke: 'rgba(235,235,245,0.55)', strokeDasharray: '3,3' }),
+        Plot.text([2012], { x: (d: number) => d, frameAnchor: 'top', dy: 6, dx: 4, textAnchor: 'start', text: () => 'VIIRS S-NPP starts', fill: 'rgba(235,235,245,0.7)' }),
         ...keys.flatMap((k) => {
           const d = rows.filter((r) => r.key === k)
           const st = STYLE[k]
@@ -4063,7 +4756,7 @@ export function OverlapChart({ series, width = 860 }: { series: AreaSeries; widt
         }),
       ],
     })
-  }, [series, width])
+  }, [series])
   return (
     <figure className="card" id="sensors">
       <header><h2>Why harmonize: one record, two instruments</h2></header>
@@ -4099,13 +4792,12 @@ export interface ReportedChartProps {
   detected: (number | null)[]
   from: YearMonth
   to: YearMonth
-  width?: number
 }
 
 const toDate = (ym: YearMonth) => new Date(`${ym}-01T00:00:00Z`)
 
-export function ReportedChart({ reported, months, detected, from, to, width = 860 }: ReportedChartProps) {
-  const make = useCallback(() => {
+export function ReportedChart({ reported, months, detected, from, to }: ReportedChartProps) {
+  const make = useCallback((width: number) => {
     const rMonths = monthRange(reported.first_month, addMonths(reported.first_month, reported.values.length - 1))
     const rows: { date: Date; v: number; panel: string }[] = []
     rMonths.forEach((ym, i) => {
@@ -4118,17 +4810,17 @@ export function ReportedChart({ reported, months, detected, from, to, width = 86
     })
     return Plot.plot({
       width, height: 380, marginLeft: 64,
-      style: { background: 'transparent', color: '#ffffff', fontSize: '12px' },
+      style: { background: 'transparent', color: 'rgba(235,235,245,0.85)', fontSize: '12px', fontFamily: 'inherit' },
       fy: { label: null },
       x: { type: 'utc', label: null },
       y: { grid: true, label: null },
       facet: { data: rows, y: 'panel', marginRight: 0 },
       marks: [
-        Plot.lineY(rows, { x: 'date', y: 'v', fy: 'panel', stroke: (d: { panel: string }) => (d.panel.startsWith('Detected') ? '#eafe07' : '#56B4E9'), strokeWidth: 1.5 }),
+        Plot.lineY(rows, { x: 'date', y: 'v', fy: 'panel', stroke: (d: { panel: string }) => (d.panel.startsWith('Detected') ? '#ff9f0a' : '#409cff'), strokeWidth: 1.5 }),
         Plot.frame({ stroke: '#ffffff', strokeOpacity: 0.2 }),
       ],
     })
-  }, [reported, months, detected, from, to, width])
+  }, [reported, months, detected, from, to])
   return (
     <figure className="card" id="reported">
       <header><h2>Fires detected and fires reported</h2></header>
@@ -4154,15 +4846,16 @@ git add src/components/OverlapChart.tsx src/components/ReportedChart.tsx
 git commit -m "demo: MODIS vs VIIRS overlap chart and detected vs reported chart"
 ```
 
-### Task 20: Download button
+### Task 20: Download and share panel
 
 **Files:** Create `src/components/ExportButton.tsx`
 
-- [ ] **Step 1: Create `src/components/ExportButton.tsx`**
+- [ ] **Step 1: Create `src/components/ExportButton.tsx`** (CSV download plus a "copy link" for the current view)
 
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import { DownloadSimple } from '@phosphor-icons/react'
+import { Check, DownloadSimple, Link } from '@phosphor-icons/react'
+import { useState } from 'react'
 import type { AreaSeries } from '../lib/aggregate'
 import type { Area } from '../lib/area'
 import { buildCsv, csvFilename } from '../lib/csv'
@@ -4171,6 +4864,7 @@ import type { Manifest } from '../lib/types'
 export function ExportButton({ manifest, area, series, i0, i1 }: {
   manifest: Manifest; area: Area; series: AreaSeries; i0: number; i1: number
 }) {
+  const [copied, setCopied] = useState(false)
   function download() {
     const csv = buildCsv(manifest, area, series, i0, i1)
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
@@ -4182,12 +4876,25 @@ export function ExportButton({ manifest, area, series, i0, i1 }: {
     a.remove()
     URL.revokeObjectURL(url)
   }
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setCopied(true)
+    } catch {
+      setCopied(false)
+    }
+  }
   return (
-    <section className="card" id="download">
-      <h2>Download</h2>
-      <p>Monthly hotspot counts for this area and these months, with every sensor, the data status and a provenance header.</p>
-      <button className="btn" onClick={download}><DownloadSimple aria-hidden /> Download CSV</button>
-    </section>
+    <div>
+      <p>Monthly hotspot counts for this area and these months ({series.months[i0]} to {series.months[i1]}), with every sensor, the data status and a provenance header.</p>
+      <button type="button" className="btn" onClick={download}><DownloadSimple aria-hidden /> Download CSV</button>
+      <h3 style={{ marginTop: '1.25rem' }}>Share this view</h3>
+      <p className="small">The link keeps the area, months and data source.</p>
+      <label className="small">Link<input type="text" readOnly value={window.location.href} onFocus={(e) => e.target.select()} style={{ width: '100%' }} /></label>
+      <button type="button" className="btn" onClick={copyLink} style={{ marginTop: '0.5rem' }}>
+        {copied ? <Check aria-hidden /> : <Link aria-hidden />} {copied ? 'Copied' : 'Copy link'}
+      </button>
+    </div>
   )
 }
 ```
@@ -4196,7 +4903,7 @@ export function ExportButton({ manifest, area, series, i0, i1 }: {
 
 ```bash
 git add src/components/ExportButton.tsx
-git commit -m "demo: CSV download button"
+git commit -m "demo: download and share panel"
 ```
 
 ### Task 21: Shareable links
@@ -4345,15 +5052,18 @@ git add src/state
 git commit -m "demo: shareable links for area, months and data source"
 ```
 
-### Task 22: Wire App (final version)
+### Task 22: App (final version)
 
 **Files:** Replace `src/App.tsx`
 
-- [ ] **Step 1: Replace `src/App.tsx`**
+- [ ] **Step 1: Replace `src/App.tsx`** (adds Trends, Sensors, Reported and Download, the summary cards in More info, and shareable links)
 
 ```tsx
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import { useEffect, useMemo, useReducer, useState } from 'react'
+// Map-first layout: the globe fills the screen; feature boxes around it open side drawers;
+// the bottom strip holds the legend, a one-line verdict and "More info".
+import { CalendarBlank, ChartLine, DownloadSimple, FireSimple, Info, MapPin, Planet, Stack, Table } from '@phosphor-icons/react'
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
 import { AboutPage } from './components/AboutPage'
 import { AnomalyChart } from './components/AnomalyChart'
 import { AreaPanel } from './components/AreaPanel'
@@ -4361,15 +5071,18 @@ import { AreaSummary } from './components/AreaSummary'
 import { BurningCalendar } from './components/BurningCalendar'
 import { DisplayOptions } from './components/DisplayOptions'
 import { ExportButton } from './components/ExportButton'
-import { Footer } from './components/Footer'
 import { GlobeMap } from './components/GlobeMap'
-import { Header } from './components/Header'
 import { KpiRow } from './components/KpiRow'
-import { Legend } from './components/Legend'
+import { CompactLegend, Legend } from './components/Legend'
 import { MockBanner } from './components/MockBanner'
 import { OverlapChart } from './components/OverlapChart'
 import { ReportedChart } from './components/ReportedChart'
 import { SeasonalChart } from './components/SeasonalChart'
+import { BottomStrip } from './components/shell/BottomStrip'
+import { Drawer } from './components/shell/Drawer'
+import { FeatureRail, type FeatureBox } from './components/shell/FeatureRail'
+import { GuideTour, guideSeen, markGuideSeen, type GuideStep } from './components/shell/GuideTour'
+import { TopBar } from './components/shell/TopBar'
 import { TimeRangePicker } from './components/TimeRangePicker'
 import { RAMP } from './config'
 import { dataSource } from './dataSource'
@@ -4378,9 +5091,9 @@ import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale } from './lib/colorScale'
-import { summarizeMonth, yearToDate } from './lib/indices'
+import { summarizeMonth, VERDICT_LABELS, yearToDate } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
-import { labelYm, parseYm, type YearMonth } from './lib/months'
+import { labelYm, longLabelYm, parseYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
 import { SERIES_LABELS, type Manifest } from './lib/types'
 import { initialState, quickRanges, reducer, type AppState } from './state/appState'
@@ -4392,6 +5105,19 @@ export default function App() {
   if (!manifest) return <p style={{ padding: '2rem' }}>Loading data…</p>
   return <Explorer manifest={manifest} overview={overview} reported={reported} />
 }
+
+type Side = 'left' | 'right'
+
+interface Panel extends FeatureBox {
+  side: Side
+  title: string
+  wide?: boolean
+  /** One sentence for the guide. */
+  guide: string
+  body: () => ReactNode
+}
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`
 
 function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & Pick<ReturnType<typeof useDataset>, 'overview' | 'reported'>) {
   const [s, dispatch] = useReducer(reducer, m, (mm): AppState => {
@@ -4406,9 +5132,15 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [m])
+
   const data = useAreaData(dataSource, m, s.area)
   const [drawError, setDrawError] = useState<string | null>(null)
   const [hoverMonth, setHoverMonth] = useState<YearMonth | null>(null)
+  const [panel, setPanel] = useState<string | null>(null)
+  // What each drawer shows. Kept after closing so the drawer slides out with its content.
+  const [shown, setShown] = useState<Record<Side, string | null>>({ left: null, right: s.view === 'about' ? 'about' : null })
+  const [more, setMore] = useState(false)
+  const [guide, setGuide] = useState(() => !guideSeen())
   useEffect(() => setHoverMonth(null), [s.area, s.source])
 
   const series = data.series
@@ -4416,6 +5148,7 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
   const i1 = series ? series.months.indexOf(s.to) : -1
   const values = useMemo(() => series?.values[s.source] ?? [], [series, s.source])
   const seriesLabel = SERIES_LABELS[s.source]
+  const ready = !!series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
 
   const calendarScale = useMemo(() => buildCountScale(
     s.scaleTo === 'range' && i0 >= 0 ? values.slice(i0, i1 + 1) : values,
@@ -4428,7 +5161,6 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     const scale = buildCountScale(totals.map((t) => t.total), { ...RAMP, palette: s.palette })
     return { cells: cellsToFeatures(totals, m.grid_deg, scale), mapScale: scale }
   }, [data.selection, s.source, i0, i1, s.palette, m.grid_deg])
-
   const overviewFc = useMemo(() => (overview ? overviewToFeatures(overview, s.palette) : EMPTY_FC), [overview, s.palette])
 
   const focus = series ? summarizeMonth(values, series.months, s.to, m.baseline_years) : null
@@ -4440,72 +5172,130 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     if (v !== null && v !== undefined) { total = (total ?? 0) + v; monthsWithData++ }
   }
   const reportedForArea = reported?.series.find((r) => r.preset_id === s.area?.presetId) ?? null
-  const showResults = series && data.status === 'ready' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
   const sensorsLine = `Sensors in ${labelYm(s.to)}: ${sensorsIn(m, s.to).map((x) => x.label).join(', ') || 'none'}.`
+  const needsArea = <p className="muted">Choose an area with data first (Area box on the left).</p>
+
+  const panels: Panel[] = [
+    { id: 'area', side: 'left', label: 'Area', icon: <MapPin aria-hidden />, title: 'Choose an area',
+      guide: 'Pick a preset region, draw a circle, box or any shape on the globe, or type coordinates.',
+      body: () => <>
+        <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
+          onTool={(tool) => dispatch({ type: 'setTool', tool })}
+          onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
+        <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
+      </> },
+    { id: 'dates', side: 'left', label: 'Dates', icon: <CalendarBlank aria-hidden />, title: 'Choose months',
+      guide: 'Choose the months to look at. Colours rescale to the months you pick.',
+      body: () => <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
+        quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} /> },
+    { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
+      guide: 'Switch between the harmonized record and raw MODIS or VIIRS, and change colours, imagery and labels.',
+      body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
+        onSource={(source) => dispatch({ type: 'setSource', source })}
+        onScaleTo={(scaleTo) => dispatch({ type: 'setScaleTo', scaleTo })}
+        onPalette={(palette) => dispatch({ type: 'setPalette', palette })}
+        onBasemap={(basemap) => dispatch({ type: 'setBasemap', basemap })}
+        onLabels={(labels) => dispatch({ type: 'setLabels', labels })} /> },
+    { id: 'calendar', side: 'right', wide: true, label: 'Calendar', icon: <Table aria-hidden />, title: 'Burning calendar',
+      guide: 'Every month since 2000 as a grid: which seasons and which years had the most hotspots.',
+      body: () => !ready ? needsArea : <>
+        <Legend id="cal-legend" scale={calendarScale} showNrt
+          title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
+        <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
+          statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
+          legendId="cal-legend" onFocusMonth={setHoverMonth} />
+        <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
+      </> },
+    { id: 'trends', side: 'right', wide: true, label: 'Trends', icon: <ChartLine aria-hidden />, title: 'Historical comparison',
+      guide: 'This year against a typical year, and every month against the multi-year average.',
+      body: () => !ready ? needsArea : <>
+        <SeasonalChart months={series.months} values={values} focusYear={parseYm(s.to).year} baselineYears={m.baseline_years} seriesLabel={seriesLabel} />
+        <AnomalyChart months={series.months} values={values} i0={i0} i1={i1} baselineYears={m.baseline_years} seriesLabel={seriesLabel} />
+      </> },
+    { id: 'sensors', side: 'right', wide: true, label: 'Sensors', icon: <Planet aria-hidden />, title: 'MODIS and VIIRS',
+      guide: 'Why harmonize: raw MODIS and VIIRS disagree, and joining them raw makes a false jump in 2012.',
+      body: () => !ready ? needsArea : <OverlapChart series={series} /> },
+    ...(reportedForArea ? [{ id: 'reported', side: 'right' as const, wide: true, label: 'Reported', icon: <FireSimple aria-hidden />, title: 'Detected and reported',
+      guide: 'Satellite detections next to fires reported on the ground, where a published statistic exists.',
+      body: () => !ready ? needsArea : <ReportedChart reported={reportedForArea} months={series.months} detected={series.values.harmonized} from={s.from} to={s.to} /> }] : []),
+    { id: 'download', side: 'right', label: 'Download', icon: <DownloadSimple aria-hidden />, title: 'Download and share',
+      guide: 'Get the monthly numbers as a CSV with their sources, or copy a link to this exact view.',
+      body: () => !ready || !s.area ? needsArea : <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1} /> },
+  ]
+  const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
+    guide: '', body: () => <AboutPage manifest={m} /> }
+  const openId = s.view === 'about' ? 'about' : panel
+  const byId = (id: string | null) => [...panels, about].find((p) => p.id === id) ?? null
+
+  const closePanel = useCallback(() => {
+    if (s.view === 'about') { dispatch({ type: 'setView', view: 'explore' }); return }
+    const id = panel
+    setPanel(null)
+    if (id) document.querySelector<HTMLElement>(`[data-tour="box-${id}"]`)?.focus()
+  }, [panel, s.view])
+  const togglePanel = (id: string) => {
+    if (s.view === 'about') dispatch({ type: 'setView', view: 'explore' })
+    const p = byId(id)
+    if (p) setShown((sh) => ({ ...sh, [p.side]: id }))
+    setPanel((cur) => (cur === id ? null : id))
+  }
+  const toggleAbout = () => {
+    setPanel(null)
+    setShown((sh) => ({ ...sh, right: 'about' }))
+    dispatch({ type: 'setView', view: s.view === 'about' ? 'explore' : 'about' })
+  }
+
+  const guideSteps: GuideStep[] = [
+    { target: null, title: 'Welcome', text: 'This globe shows where satellites detected fire hotspots, from 2000 to now. Colours show how many, for the area and months you choose.' },
+    ...panels.map((p) => ({ target: `box-${p.id}`, title: p.label, text: p.guide })),
+    { target: 'strip', title: 'Legend and summary', text: 'What the colours mean. Press More info for the verdict: is the latest month unusual for this area?' },
+    { target: 'guide', title: 'Guide', text: 'Open this guide again any time.' },
+  ]
+  const closeGuide = () => { markGuideSeen(); setGuide(false) }
+
+  const selection = `${s.area?.label ?? 'No area'}, ${labelYm(s.from)} – ${labelYm(s.to)}`
+  const headline: ReactNode = !s.area ? 'Choose an area to begin.'
+    : data.coverage === 'none' ? 'No data is loaded for this area yet.'
+    : !focus || focus.value === null ? `${s.area.label}: loading…`
+    : <><strong>{longLabelYm(s.to)}</strong>: {Math.round(focus.value).toLocaleString('en-GB')} hotspots
+        {focus.verdict && focus.percentile !== null && <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile)</>}</>
 
   return (
-    <div className="app">
+    <div className={m.mock ? 'app has-banner' : 'app'}>
       <a href="#main" className="skip-link">Skip to main content</a>
       {m.mock && <MockBanner />}
-      <Header view={s.view} onView={(view) => dispatch({ type: 'setView', view })} />
-      {s.view === 'about' ? <AboutPage manifest={m} /> : (
-        <main className="explore" id="main">
-          <aside className="controls" aria-label="Choose an area and months">
-            <AreaPanel presets={m.presets} area={s.area} tool={s.tool} error={drawError}
-              onTool={(tool) => dispatch({ type: 'setTool', tool })}
-              onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
-            <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
-              quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} />
-            <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
-              onSource={(source) => dispatch({ type: 'setSource', source })}
-              onScaleTo={(scaleTo) => dispatch({ type: 'setScaleTo', scaleTo })}
-              onPalette={(palette) => dispatch({ type: 'setPalette', palette })}
-              onBasemap={(basemap) => dispatch({ type: 'setBasemap', basemap })}
-              onLabels={(labels) => dispatch({ type: 'setLabels', labels })} />
-          </aside>
-          <section className="map-col" aria-label="Map">
-            <div className="globe-wrap">
-              <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-                onDrawn={(area) => {
-                  const err = validateDrawn(area)
-                  setDrawError(err)
-                  dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
-                }} />
-            </div>
-            {mapScale && <Legend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} to ${labelYm(s.to)} (bins fit these months)`} />}
-            <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
-          </section>
-          <section className="results" id="results" aria-label="Results" tabIndex={-1}>
-            <nav className="section-nav" aria-label="Result sections">
-              <a href="#summary">Summary</a><a href="#calendar">Calendar</a><a href="#seasons">Seasons</a>
-              <a href="#anomalies">Anomalies</a><a href="#sensors">Sensors</a>{reportedForArea && <a href="#reported">Reported</a>}<a href="#download">Download</a>
-            </nav>
-            {!showResults ? <p className="muted">Results appear here once an area with data is chosen.</p> : (
-              <>
-                <div className="card" id="summary">
-                  <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel}
-                    focus={focus!} focusStatus={monthStatus(m, s.to)} ytd={ytd} baselineYears={m.baseline_years} sensorsLine={sensorsLine} />
-                </div>
-                <section className="card" id="calendar" aria-labelledby="cal-title">
-                  <header><h2 id="cal-title">Burning calendar</h2></header>
-                  <Legend id="cal-legend" scale={calendarScale} showNrt
-                    title={s.scaleTo === 'range' ? `Hotspots per month (bins fit ${labelYm(s.from)} to ${labelYm(s.to)})` : 'Hotspots per month (bins fit the whole record)'} />
-                  <BurningCalendar months={series.months} values={values} from={s.from} to={s.to} scale={calendarScale}
-                    statusOf={(ym) => monthStatus(m, ym)} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
-                    legendId="cal-legend" onFocusMonth={setHoverMonth} />
-                  <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} />
-                </section>
-                <SeasonalChart months={series.months} values={values} focusYear={parseYm(s.to).year} baselineYears={m.baseline_years} seriesLabel={seriesLabel} />
-                <AnomalyChart months={series.months} values={values} i0={i0} i1={i1} baselineYears={m.baseline_years} seriesLabel={seriesLabel} />
-                <OverlapChart series={series} />
-                {reportedForArea && <ReportedChart reported={reportedForArea} months={series.months} detected={series.values.harmonized} from={s.from} to={s.to} />}
-                {s.area && <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1} />}
-              </>
-            )}
-          </section>
-        </main>
-      )}
-      <Footer />
+      <TopBar selection={selection} onSelectionClick={() => togglePanel('area')} onGuide={() => setGuide(true)} onAbout={toggleAbout} />
+      <main id="main" tabIndex={-1}>
+        <div className="rails">
+          <FeatureRail side="left" label="Choose what to show" boxes={panels.filter((p) => p.side === 'left')} open={panel} onToggle={togglePanel} />
+          <FeatureRail side="right" label="Analysis" boxes={panels.filter((p) => p.side === 'right')} open={panel} onToggle={togglePanel} />
+        </div>
+        {(['left', 'right'] as const).map((side) => {
+          const p = byId(shown[side])
+          return p && (
+            <Drawer key={side} open={openId === p.id} side={side} wide={p.wide} title={p.title} onClose={closePanel}>{p.body()}</Drawer>
+          )
+        })}
+        <div className="map-full">
+          <GlobeMap area={s.area} cells={cells} overview={overviewFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
+            onDrawn={(area) => {
+              const err = validateDrawn(area)
+              setDrawError(err)
+              dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+            }} />
+        </div>
+      </main>
+      <BottomStrip expanded={more} onToggle={() => setMore((x) => !x)} headline={headline}
+        legend={mapScale
+          ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
+          : <span className="small muted">Choose an area to colour the globe.</span>}
+        more={<>
+          {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel}
+            focus={focus} focusStatus={monthStatus(m, s.to)} ytd={ytd} baselineYears={m.baseline_years} sensorsLine={sensorsLine} />}
+          <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
+          <p className="small muted">Colours show satellite hotspot detections, not fires or burned area. They are rebuilt for the months you choose, so the full ramp is always used.</p>
+        </>} />
+      {guide && <GuideTour steps={guideSteps} onClose={closeGuide} />}
     </div>
   )
 }
@@ -4529,23 +5319,22 @@ function CellDetail({ ym, values, months, manifest, seriesLabel }: {
 - [ ] **Step 2: Typecheck, test, lint**
 
 Run: `npx tsc -b && npm test && npx oxlint`
-Expected: `Tests  60 passed (60)`; oxlint shows warnings only.
+Expected: `Tests  66 passed (66)`; oxlint shows warnings only.
 
 - [ ] **Step 3: Check by hand** (`npm run dev`)
-- [ ] Summary cards show "October 2026 (Near real-time: provisional)", a verdict word with its percentile, the anomaly vs average and median, year to date, rank, and a caption naming 2003 to 2025 and the sensors.
-- [ ] Set To = November 2026: a notice says the month is not finished.
-- [ ] Season chart: yellow 2026 line, dashed median, two blue bands.
-- [ ] Anomaly chart: blue and red bars. "Compare with median" changes the bars.
-- [ ] Overlap chart: the pink stitched line jumps in 2012 and the white harmonized line does not.
-- [ ] UK preset: the "Fires detected and fires reported" chart appears. It is absent for the other presets.
-- [ ] Download CSV: the file opens in a spreadsheet, the header lines start with `#`, and there is one row per month.
-- [ ] Copy the URL, open it in a new private window: the same area, months and data load.
+- [ ] More info shows the summary cards: "October 2026 (Near real-time: provisional)", a verdict with a coloured dot and its percentile, the anomaly against the average and the median, year to date, rank, and a caption naming 2003 to 2025 and the sensors.
+- [ ] Set To = November 2026 (Dates box): a notice says the month is not finished.
+- [ ] Trends box: orange 2026 line, dashed median, two blue bands; the anomaly bars are blue and red, and "Compare with: median" changes them.
+- [ ] Sensors box: the pink stitched line jumps in 2012 and the white harmonized line does not.
+- [ ] UK preset: a Reported box appears and opens the detected-vs-reported chart. It is absent for the other presets.
+- [ ] Download box: the CSV opens in a spreadsheet with `#` header lines and one row per month; "Copy link" copies the URL. Opening that URL in a private window restores the area, months and data.
+- [ ] The guide has 10 steps for the UK preset (9 for the others).
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add src/App.tsx
-git commit -m "demo: checkpoint 4, indices, charts, download and share link"
+git commit -m "demo: checkpoint 4, summary, charts, download and share link"
 ```
 
 #### ✅ CHECKPOINT 4: Feature complete. Stop and review with Aziz
@@ -4596,102 +5385,145 @@ export default defineConfig({
 ```ts
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import AxeBuilder from '@axe-core/playwright'
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 
-test.beforeEach(async ({ page }) => {
+const selection = (page: Page) => page.locator('[data-tour="selection"]')
+const headline = (page: Page) => page.locator('.strip-headline')
+async function openPanel(page: Page, name: string) {
+  await page.getByRole('button', { name, exact: true }).click()
+  await expect(page.locator('#drawer')).toBeVisible()
+}
+
+test.describe('app', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem('hotspot-calendar-guide-seen', '1'))
+    await page.goto('/')
+    await expect(headline(page)).toContainText('hotspots')
+  })
+
+  test('loads with no login and shows the mock banner on demo builds', async ({ page }) => {
+    await expect(page.getByText('MOCK DATA, NOT REAL')).toBeVisible()
+    await expect(page.getByText(/Data: NASA FIRMS/)).toBeVisible()
+  })
+
+  test('a preset gives the calendar, verdict and charts', async ({ page }) => {
+    await openPanel(page, 'Area')
+    await page.getByLabel('Preset region').selectOption('uk')
+    await expect(selection(page)).toContainText('United Kingdom (mock)')
+    await openPanel(page, 'Calendar')
+    await expect(page.getByRole('rowheader', { name: '2003', exact: true })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'More info' }).click()
+    await expect(page.getByText(/percentile of \d+ Octobers/)).toBeVisible()
+    await page.getByRole('button', { name: 'Less' }).click()
+    await openPanel(page, 'Sensors')
+    await expect(page.getByRole('img', { name: /yearly hotspot totals/ })).toBeVisible()
+    await openPanel(page, 'Reported')
+    await expect(page.getByRole('heading', { name: 'Fires detected and fires reported' })).toBeVisible()
+  })
+
+  test('typed coordinates: valid box works, invalid box explains why', async ({ page }) => {
+    await openPanel(page, 'Area')
+    await page.getByText('Or type coordinates').click()
+    const field = (label: string, value: string) => page.getByLabel(label, { exact: true }).fill(value)
+    await field('West', '5')
+    await field('South', '50')
+    await field('East', '1')
+    await field('North', '60')
+    await page.getByRole('button', { name: 'Use these coordinates' }).click()
+    await expect(page.getByRole('alert')).toContainText('West must be less than east')
+    await field('West', '-6')
+    await page.getByRole('button', { name: 'Use these coordinates' }).click()
+    await expect(selection(page)).toContainText('Box W -6, S 50, E 1, N 60')
+  })
+
+  test('an area outside the loaded data says so instead of showing zeros', async ({ page }) => {
+    await openPanel(page, 'Area')
+    await page.getByText('Or type coordinates').click()
+    const field = (label: string, value: string) => page.getByLabel(label, { exact: true }).fill(value)
+    await field('West', '-60')
+    await field('South', '-10')
+    await field('East', '-50')
+    await field('North', '0')
+    await page.getByRole('button', { name: 'Use these coordinates' }).click()
+    await expect(headline(page)).toContainText('No data is loaded for this area yet')
+  })
+
+  test('drawing a circle on the globe selects an area', async ({ page, isMobile }) => {
+    test.skip(isMobile, 'Drawing is checked on desktop; phones use presets and typed coordinates.')
+    await page.waitForTimeout(2000) // let the globe finish flying to the first preset
+    await openPanel(page, 'Area')
+    await page.getByRole('button', { name: 'Circle' }).click()
+    const { width, height } = page.viewportSize()!
+    const [x, y] = [width * 0.68, height * 0.45] // right of the drawer, left of the boxes
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 50, y + 30, { steps: 8 })
+    await page.mouse.up()
+    await expect(selection(page)).toContainText('Drawn circle')
+  })
+
+  test('changing months rescales the calendar and keyboard moves between months', async ({ page }) => {
+    await openPanel(page, 'Dates')
+    await page.getByRole('button', { name: 'Last 5 years' }).click()
+    await openPanel(page, 'Calendar')
+    await expect(page.getByText(/bins fit Jan 2022 to Oct 2026/)).toBeVisible()
+    await page.mouse.move(0, 0) // hover also updates the detail line; keep the pointer out of the way
+    await page.getByLabel(/^Oct 2026:/).focus()
+    await page.keyboard.press('ArrowUp')
+    await expect(page.getByLabel(/^Oct 2025:/)).toBeFocused()
+    await expect(page.locator('.cell-detail')).toContainText('Oct 2025')
+  })
+
+  test('CSV download has provenance and one row per month', async ({ page }) => {
+    await openPanel(page, 'Dates')
+    await page.getByRole('button', { name: 'Last 12 months' }).click()
+    await openPanel(page, 'Download')
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV' }).click()])
+    const text = readFileSync((await download.path())!, 'utf8')
+    expect(text).toContain('# Counts are satellite hotspot detections, not fires or burned area.')
+    expect(text).toContain('MOCK DATA, NOT REAL')
+    expect(text.split('\n').filter((l) => /^\d{4},/.test(l))).toHaveLength(12)
+  })
+
+  test('the link restores the same view, also when pasted into an open tab', async ({ page }) => {
+    await page.goto('/#area=preset:uk&from=2022-01&to=2024-12&src=modis')
+    await expect(selection(page)).toContainText('United Kingdom (mock), Jan 2022 – Dec 2024')
+    await openPanel(page, 'Layers')
+    await expect(page.getByLabel('MODIS only (raw)')).toBeChecked()
+  })
+
+  test('no automatic accessibility violations', async ({ page }) => {
+    const scan = async () => (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => `${v.id}: ${v.help}`)
+    expect(await scan()).toEqual([])
+    await openPanel(page, 'Calendar')
+    expect(await scan()).toEqual([])
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: 'More info' }).click()
+    expect(await scan()).toEqual([])
+  })
+})
+
+test('the guide opens on the first visit and can be reopened', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: 'Summary' })).toBeVisible()
-})
-
-test('loads with no login and shows the mock banner on demo builds', async ({ page }) => {
-  await expect(page.getByText('MOCK DATA, NOT REAL')).toBeVisible()
-  await expect(page.getByText(/Data: NASA FIRMS/)).toBeVisible()
-})
-
-test('a preset gives the calendar, verdict and charts', async ({ page }) => {
-  await page.getByLabel('Preset region').selectOption('uk')
-  await expect(page.locator('.map-col').getByText('United Kingdom (mock)')).toBeVisible()
-  await expect(page.getByRole('rowheader', { name: '2003', exact: true })).toBeVisible()
-  await expect(page.getByText(/percentile of \d+ Octobers/)).toBeVisible()
-  await expect(page.getByRole('img', { name: /yearly hotspot totals/ })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Fires detected and fires reported' })).toBeVisible()
-})
-
-test('typed coordinates: valid box works, invalid box explains why', async ({ page }) => {
-  await page.getByText('Or type coordinates').click()
-  await page.getByLabel('West', { exact: true }).fill('5')
-  await page.getByLabel('South', { exact: true }).fill('50')
-  await page.getByLabel('East', { exact: true }).fill('1')
-  await page.getByLabel('North', { exact: true }).fill('60')
-  await page.getByRole('button', { name: 'Use these coordinates' }).click()
-  await expect(page.getByRole('alert')).toContainText('West must be less than east')
-  await page.getByLabel('West', { exact: true }).fill('-6')
-  await page.getByLabel('East', { exact: true }).fill('1')
-  await page.getByRole('button', { name: 'Use these coordinates' }).click()
-  await expect(page.locator('.map-col').getByText(/Box W -6, S 50, E 1, N 60/)).toBeVisible()
-})
-
-test('an area outside the loaded data says so instead of showing zeros', async ({ page }) => {
-  await page.getByText('Or type coordinates').click()
-  await page.getByLabel('West', { exact: true }).fill('-60')
-  await page.getByLabel('South', { exact: true }).fill('-10')
-  await page.getByLabel('East', { exact: true }).fill('-50')
-  await page.getByLabel('North', { exact: true }).fill('0')
-  await page.getByRole('button', { name: 'Use these coordinates' }).click()
-  await expect(page.getByText(/No data is loaded for this area yet/)).toBeVisible()
-})
-
-test('drawing a circle on the globe selects an area', async ({ page, isMobile }) => {
-  test.skip(isMobile, 'Drawing is checked on desktop; phones use presets and typed coordinates.')
-  await page.waitForTimeout(2000) // let the globe finish flying to the first preset
-  await page.getByRole('button', { name: 'Circle' }).click()
-  const box = (await page.locator('.globe canvas').boundingBox())!
-  const [x, y] = [box.x + box.width / 2, box.y + box.height / 2]
-  await page.mouse.move(x, y)
-  await page.mouse.down()
-  await page.mouse.move(x + 50, y + 30, { steps: 8 })
-  await page.mouse.up()
-  await expect(page.locator('.map-col').getByText('Drawn circle')).toBeVisible()
-})
-
-test('changing months rescales the calendar and keyboard moves between months', async ({ page }) => {
-  await page.getByRole('button', { name: 'Last 5 years' }).click()
-  await expect(page.getByText(/bins fit Jan 2022 to Oct 2026/)).toBeVisible()
-  await page.mouse.move(0, 0) // hover also updates the detail line; keep the pointer out of the way
-  const cell = page.getByLabel(/^Oct 2026:/)
-  await cell.focus()
-  await page.keyboard.press('ArrowUp')
-  await expect(page.getByLabel(/^Oct 2025:/)).toBeFocused()
-  await expect(page.locator('.cell-detail')).toContainText('Oct 2025')
-})
-
-test('CSV download has provenance and one row per month', async ({ page }) => {
-  await page.getByRole('button', { name: 'Last 12 months' }).click()
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV' }).click()])
-  const text = readFileSync((await download.path())!, 'utf8')
-  expect(text).toContain('# Counts are satellite hotspot detections, not fires or burned area.')
-  expect(text).toContain('MOCK DATA, NOT REAL')
-  expect(text.split('\n').filter((l) => /^\d{4},/.test(l))).toHaveLength(12)
-})
-
-test('the link restores the same view, also when pasted into an open tab', async ({ page }) => {
-  await page.goto('/#area=preset:uk&from=2022-01&to=2024-12&src=modis')
-  await expect(page.getByLabel('Preset region')).toHaveValue('uk')
-  await expect(page.getByLabel('MODIS only (raw)')).toBeChecked()
-  await expect(page.getByText('Hotspots detected, 2022-01 to 2024-12')).toBeVisible()
-})
-
-test('no automatic accessibility violations', async ({ page }) => {
-  const results = await new AxeBuilder({ page }).exclude('.globe').analyze()
-  expect(results.violations.map((v) => `${v.id}: ${v.help}`)).toEqual([])
+  await expect(page.getByRole('dialog')).toContainText('Step 1 of')
+  await page.getByRole('button', { name: 'Next' }).click()
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Area' })).toBeVisible()
+  await page.getByRole('button', { name: 'Skip guide' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.reload()
+  await expect(headline(page)).toContainText('hotspots')
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Guide' }).click()
+  await expect(page.getByRole('dialog')).toContainText('Step 1 of')
 })
 ```
 
 - [ ] **Step 4: Run**
 
 Run: `npm run test:e2e`
-Expected: `17 passed`, with 1 skipped (drawing is skipped on the phone profile). It builds the demo first, so the first run takes about 30 s.
+Expected: `19 passed`, with 1 skipped (drawing is skipped on the phone profile). It builds the demo first, so the first run takes about 30 s.
 
 - [ ] **Step 5: Commit**
 
@@ -4746,6 +5578,7 @@ Parts of this code were generated with AI assistance (Claude) and reviewed by th
 | NASA FIRMS | MODIS C6.1 (Terra + Aqua) active fire, 1 km | NASA open data, no restriction; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
 | NASA FIRMS | VIIRS 375 m active fire (Suomi NPP, NOAA-20) | NASA open data, no restriction; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
 | NASA GIBS | BlueMarble_ShadedRelief_Bathymetry, VIIRS_Black_Marble (2016) | NASA open data; credit NASA GIBS | https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api |
+| OpenFreeMap | Vector tiles (OpenMapTiles schema) and fonts, for borders and place names | Data © OpenStreetMap contributors (ODbL); © OpenMapTiles; OpenFreeMap is free to use with credit | https://openfreemap.org |
 
 ## Software (exact versions in demo/package-lock.json)
 | Library | Version | Licence | URL |
@@ -4758,7 +5591,6 @@ Parts of this code were generated with AI assistance (Claude) and reviewed by th
 | Observable Plot | 0.6.19 | ISC | https://observablehq.com/plot |
 | d3-scale, d3-scale-chromatic | 4.0.3, 3.1.1 | ISC (ColorBrewer schemes: Apache-2.0) | https://d3js.org |
 | Turf (@turf/area, bbox, bbox-polygon, boolean-point-in-polygon, circle) | 7.4.0 | MIT | https://turfjs.org |
-| Fontsource Fira Sans, Overpass | 5.3.0 | SIL OFL 1.1 | https://fontsource.org |
 | Phosphor Icons (React) | 2.1.10 | MIT | https://phosphoricons.com |
 | Vitest, jsdom | 5.1.0, 31.0.1 | MIT | https://vitest.dev |
 | Testing Library (react, jest-dom, user-event) | 16.3.3, 7.0.1, 14.6.10 | MIT | https://testing-library.com |
@@ -4773,7 +5605,8 @@ Parts of this code were generated with AI assistance (Claude) and reviewed by th
 | cividis ramp | Nuñez, Anderton & Renslow 2018, https://doi.org/10.1371/journal.pone.0199239 | CC0 (via d3-scale-chromatic) |
 | RdBu diverging scheme | Cynthia Brewer, ColorBrewer | Apache-2.0 |
 | Okabe-Ito categorical colours | Okabe & Ito 2008, Color Universal Design | free use, cite |
-| Brand palette, fonts, icon guidance | NASA Space Apps Brand Guidelines, https://www.spaceappschallenge.org/brand/ | Space Apps terms |
+| Filled-button blue, icon guidance | NASA Space Apps Brand Guidelines, https://www.spaceappschallenge.org/brand/ | Space Apps terms |
+| Interface style (materials, motion, type) | Apple WWDC design talks, e.g. Designing Fluid Interfaces (2018), The Details of UI Typography (2020): inspiration only, no Apple assets used | n/a |
 
 ## Papers and guides
 See HANDOVER.md section 14 until the final list is written.
@@ -4800,7 +5633,8 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 
 - [ ] Chrome DevTools, Rendering, "Emulate vision deficiencies": protanopia, deuteranopia, tritanopia and achromatopsia (greyscale). The calendar, map and anomaly bars are still readable: hatches, outlines and numbers carry the meaning.
 - [ ] Keyboard only: Tab through the controls, choose a preset, type a box, move in the calendar with the arrows, download the CSV. A focus ring is always visible.
-- [ ] Phone (real device on the same Wi-Fi with `npm run dev -- --host`, or DevTools device mode): controls stack under the globe and nothing overflows sideways.
+- [ ] Phone (real device on the same Wi-Fi with `npm run dev -- --host`, or DevTools device mode): boxes sit in one scrolling row above the strip, drawers open as sheets, nothing overflows sideways.
+- [ ] macOS System Settings, Accessibility, Display: "Reduce motion" (drawers fade instead of sliding), "Reduce transparency" (panels turn solid), "Increase contrast" (stronger edges).
 - [ ] Private window, no login: `npm run build:demo && npx vite preview` loads.
 - [ ] Spot check (HANDOVER 12): for the UK preset, Oct 2025, the calendar number = the CSV row = the season chart point (hover).
 - [ ] Copy: no "fires" alone, no "unprecedented", "safe", "confirmed", "live" or "warning" except in "not a warning service".
@@ -4812,7 +5646,7 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 - [ ] Open the URL in a private window and on a phone.
 
 #### ✅ CHECKPOINT 5: Ready to publish. Stop and review with Aziz
-`npm test` (60), `npm run test:e2e` (17), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
+`npm test` (66), `npm run test:e2e` (19), QA list signed off, docs present. Tag `cp5-ready`. Push when Aziz says so.
 
 ---
 
