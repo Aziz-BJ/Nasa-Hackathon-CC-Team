@@ -1,0 +1,48 @@
+{
+  "name": "demo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fontsource/fira-sans": "5.3.0",
+    "@fontsource/overpass": "5.3.0",
+    "@observablehq/plot": "0.6.19",
+    "@phosphor-icons/react": "2.1.10",
+    "@turf/area": "7.4.0",
+    "@turf/bbox": "7.4.0",
+    "@turf/bbox-polygon": "7.4.0",
+    "@turf/boolean-point-in-polygon": "7.4.0",
+    "@turf/circle": "7.4.0",
+    "d3-scale": "4.0.3",
+    "d3-scale-chromatic": "3.1.1",
+    "maplibre-gl": "6.18.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "terra-draw": "1.39.0",
+    "terra-draw-maplibre-gl-adapter": "1.5.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.1",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.10",
+    "@types/d3-scale": "4.0.9",
+    "@types/d3-scale-chromatic": "3.1.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "31.0.1",
+    "oxlint": "^1.90.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "5.1.0"
+  }
+}
