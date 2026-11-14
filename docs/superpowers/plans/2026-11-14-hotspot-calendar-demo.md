@@ -1444,6 +1444,9 @@ describe('buildCountScale', () => {
     const s = buildCountScale(skewed, { method: 'quantile', bins: 7, palette: 'inferno' })
     expect(s.edges.length).toBeGreaterThan(2)
     expect(s.colorOf(1)).not.toBe(s.colorOf(1000))
+    // A narrow range keeps its quantile bins: log bins would merge 10 and 19
+    const narrow = buildCountScale([...Array(40).fill(10), 11, 12, 13, 14, 15, 16, 17, 18, 19], { method: 'quantile', bins: 7, palette: 'inferno' })
+    expect(narrow.colorOf(10)).not.toBe(narrow.colorOf(19))
   })
   it('makes log bins with round numbers', () => {
     const s = buildCountScale([1, 1000], { method: 'log', bins: 3, palette: 'inferno' })
@@ -1531,9 +1534,12 @@ export function buildCountScale(
   if (pos.length > 1) {
     thresholds = make(opts.method)
     // Many tied low counts (lots of 1s and 2s) collapse quantile bins, so 2 and 1000 would share a colour.
-    // Then log bins keep the high values apart.
+    // Then log bins keep the high values apart, if they give more bins (they don't for a narrow range).
     const distinct = new Set(pos).size
-    if (opts.method === 'quantile' && thresholds.length + 1 < Math.min(opts.bins, distinct)) thresholds = make('log')
+    if (opts.method === 'quantile' && thresholds.length + 1 < Math.min(opts.bins, distinct)) {
+      const log = make('log')
+      if (log.length > thresholds.length) thresholds = log
+    }
   }
   const edges = [min, ...thresholds]
   const interp = PALETTES[opts.palette].interpolate
@@ -4800,6 +4806,11 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 - The mock data has 1° cells over 4 regions. Real data will likely be 0.25° over more of the globe, so watch tile sizes (section 2.3).
 - oxlint leaves warnings about the React "latest ref" pattern and async loading in effects. They are deliberate and harmless.
 - Not built yet, from HANDOVER F4 "Should": the trend test (Sen's slope + Mann–Kendall on annual harmonized totals) and peak month / season length. Add them after Checkpoint 4 only if time allows, as pure functions in `indices.ts` with tests first, shown as a "Long-term trend" card. Run the trend on harmonized data only.
+- Accepted minor engine limits (Checkpoint 1 verifier):
+  - `coverageOf` samples points, so a coverage gap narrower than about a tenth of the area can be missed.
+  - A circle whose bounding box touches coverage, but not the circle itself, reports "partial" instead of "none".
+  - Manifest validation doesn't check span order or the `baseline_years` types.
+  - Very large thin slivers (over 20,000 candidate cell centres) skip the centre-cell fallback.
 - Stretch items from HANDOVER section 8 (fire-event clustering, day/night split, more presets) are out of scope.
 
 ## Appendix: Which Claude model for which part
