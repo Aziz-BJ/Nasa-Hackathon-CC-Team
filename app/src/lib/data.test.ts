@@ -139,6 +139,29 @@ describe('createDataSource', () => {
     expect(fetchFn).toHaveBeenCalledTimes(2)
     expect(fetchFn).toHaveBeenLastCalledWith('/data/x/cells/aa.json')
   })
+  it('treats a missing detections index as absent, and keeps that answer', async () => {
+    const html = new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })
+    expect(await createDataSource('/', async () => html).detectionsIndex()).toBeNull()
+    const fetchFn = vi.fn(async () => new Response('', { status: 404 }))
+    const ds = createDataSource('/', fetchFn)
+    expect(await ds.detectionsIndex()).toBeNull()
+    expect(await ds.detectionsIndex()).toBeNull()
+    expect(fetchFn).toHaveBeenCalledTimes(1)
+  })
+  it('retries the detections index after a network or server error, then keeps it', async () => {
+    const index = { schema_version: 2, last_day: '2026-11-13', satellites: ['AQUA', 'SNPP', 'NOAA20'], regions: {} }
+    const fetchFn = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(new Response('', { status: 503 }))
+      .mockResolvedValue(json(index))
+    const ds = createDataSource('/data/x/', fetchFn)
+    await expect(ds.detectionsIndex()).rejects.toThrow(/Failed to fetch/)
+    await expect(ds.detectionsIndex()).rejects.toThrow(/HTTP 503/)
+    expect(await ds.detectionsIndex()).toEqual(index)
+    expect(await ds.detectionsIndex()).toEqual(index)
+    expect(fetchFn).toHaveBeenCalledTimes(3)
+    expect(fetchFn).toHaveBeenLastCalledWith('/data/x/detections/index.json')
+  })
   it('does not cache an unsorted cell file as good', async () => {
     const bad: CellFile = { ...FIX_CELLS_AA, entries: [1, 0, 1, 1, 0, 0, 0, 0, 3, 3, 0, 0] }
     const ds = createDataSource('/', async () => json(bad))

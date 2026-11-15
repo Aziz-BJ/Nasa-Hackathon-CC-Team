@@ -65,6 +65,8 @@ interface Panel extends FeatureBox {
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`
 const VERDICT_ORDER: VerdictLevel[] = ['well-below', 'below', 'typical', 'above', 'well-above']
 const NO_VERDICT_COLOR = '#8e8e93'
+/** Stable empty list, so the detections memo does not rerun on every render. */
+const NO_DETECTION_FILES: DetectionsFile[] = []
 
 /** "1–13 November 2026" for the unfinished month, "October 2026" otherwise. */
 function focusLabelOf(m: Manifest, ym: YearMonth): string {
@@ -143,9 +145,22 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   // Raw detections at native pixel size (optional layer, off by default). Only the files for the regions in view
   // and the years of the chosen months are loaded; nothing else in the app reads them.
   const [detIndex, setDetIndex] = useState<DetectionsIndex | null>(null)
-  useEffect(() => { void dataSource.detectionsIndex().then(setDetIndex) }, [])
+  // A network error (a weak connection) is retried a few times; a missing index (404) means this build has no detections.
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | undefined
+    const load = (attempt: number) => {
+      dataSource.detectionsIndex().then((ix) => { if (!cancelled) setDetIndex(ix) }, () => {
+        if (!cancelled && attempt < 5) timer = window.setTimeout(() => load(attempt + 1), 2000 * attempt)
+      })
+    }
+    load(1)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [])
   const [detFiles, setDetFiles] = useState<{ key: string; files: DetectionsFile[] } | null>(null)
   const [detError, setDetError] = useState<string | null>(null)
+  // Bumped by "Try again" in the key, to reload files that failed (the data source does not keep failures).
+  const [detAttempt, setDetAttempt] = useState(0)
   const detShow = s.detections.show && !!detIndex && !!s.area
   const detKey = detShow && s.area ? regionsTouching(m, s.area)
     .flatMap((r) => yearsToLoad(Object.keys(detIndex!.regions[r] ?? {}), s.from, s.to).map((y) => `${r}/${y}`)).join(',') : ''
@@ -157,9 +172,9 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
       .then((files) => { if (!cancelled) setDetFiles({ key: detKey, files }) })
       .catch((e: unknown) => { if (!cancelled) setDetError(e instanceof Error ? e.message : String(e)) })
     return () => { cancelled = true }
-  }, [detKey])
+  }, [detKey, detAttempt])
   // No key means no files to load (an area outside every region): an empty selection, not a spinner.
-  const detReady = detKey === '' ? [] : detFiles?.key === detKey ? detFiles.files : null
+  const detReady = detKey === '' ? NO_DETECTION_FILES : detFiles?.key === detKey ? detFiles.files : null
   const detLoading = detShow && detReady === null && !detError
   const detSelection = useMemo(() => (detShow && s.area && detReady
     ? selectDetections(detReady, s.area, s.from, s.to, s.detections) : null),
@@ -210,7 +225,9 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   })()
   const rangeNote = !harmonizedSource ? null : series?.estimate ? 'estimate' as const
     : !range && sourceCode(m, s.to) === 'measured_aqua' ? 'measured' as const : null
-  const ytd = series && !noVerdictReason(m, s.source, s.to) ? yearToDate(comparableValues(s.source, series.months, values), series.months, s.to, m.baseline_years) : null
+  // Why the last chosen month gets no comparison (incomplete month, drifted raw Aqua), or null.
+  const noVerdict = noVerdictReason(m, s.source, s.to)
+  const ytd = series && !noVerdict ? yearToDate(comparableValues(s.source, series.months, values), series.months, s.to, m.baseline_years) : null
   let total: number | null = null
   let monthsWithData = 0
   for (let i = i0; i >= 0 && i <= i1; i++) {
@@ -338,7 +355,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
         {focus.verdict && focus.percentile !== null
           ? <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile{partial ? ' of the same days' : ''})</>
           : partial ? ' · not comparable yet'
-          : noVerdictReason(m, s.source, s.to) ? ` · ${noVerdictReason(m, s.source, s.to)!.short}` : null}</>
+          : noVerdict ? ` · ${noVerdict.short}` : null}</>
 
   const verdictKey = <VerdictKey title={`Region tint: ${labelYm(s.to)} compared with usual`}
     colors={[...VERDICT_ORDER.map((v) => VERDICT_COLORS[v]), NO_VERDICT_COLOR]} labels={['well below', 'below', 'typical', 'above', 'well above', 'no verdict']} />
@@ -376,14 +393,15 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
           {mapScale
             ? <CompactLegend scale={mapScale} title={`${unit} per ${m.cell_km} km cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
             : <span className="small muted">{s.area ? `No fire cells in ${labelYm(s.from)} – ${labelYm(s.to)} for this area.` : 'Choose an area to show its fire cells.'}</span>}
-          {detShow && <DetectionsLegend selection={detSelection} state={s.detections} loading={detLoading} error={detError} />}
+          {detShow && <DetectionsLegend selection={detSelection} state={s.detections} loading={detLoading} error={detError}
+            onRetry={() => setDetAttempt((n) => n + 1)} />}
           {verdictKey}
         </div>}
         more={<>
           {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel} unit={unit}
             focus={focus} focusLabel={focusLabel} focusStatus={monthStatus(m, s.to, s.source)} range={range} rangeNote={rangeNote} rangeSummed={!!series?.bandSummed}
             ytd={ytd} baselineYears={m.baseline_years} sourceLine={sourceLine} sensorsLine={sensorsLine}
-            noVerdictReason={noVerdictReason(m, s.source, s.to)?.long} />}
+            noVerdictReason={noVerdict?.long} />}
           {ready && s.area && (
             <p>
               <button type="button" className="btn btn-primary"

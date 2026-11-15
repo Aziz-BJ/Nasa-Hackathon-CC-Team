@@ -175,6 +175,10 @@ test.describe('app', () => {
     await sats.uncheck()
     await expect(key).toContainText('(hidden)')
     expect((await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => v.id)).toEqual([])
+    // A link made with the layer off, pasted into this tab, turns it off.
+    await page.evaluate(() => { window.location.hash = 'area=region:sardinia&from=2021-07&to=2021-08&src=harmonized' })
+    await expect(key).toHaveCount(0)
+    await expect(page).not.toHaveURL(/det=1/)
   })
 
   test('hotspots CSV: one row per detection in the search, with the FIRMS credit', async ({ page }) => {

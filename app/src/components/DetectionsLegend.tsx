@@ -4,14 +4,18 @@ import { DETECTION_SATELLITES, type DetectionSelection, type DetectionsState } f
 const fmt = (n: number) => n.toLocaleString('en-GB')
 
 /** The detections layer's key for the bottom strip: one swatch per satellite with its count, and the raw-data note. */
-export function DetectionsLegend({ selection, state, loading, error }: {
+export function DetectionsLegend({ selection, state, loading, error, onRetry }: {
   selection: DetectionSelection | null; state: DetectionsState; loading: boolean; error: string | null
+  /** Loads the files again after an error. */
+  onRetry?: () => void
 }) {
   const title = 'Detections at native pixel size (raw, not harmonized)'
   return (
     <div className="legend-detections">
       <div className="small">{title}</div>
-      {error ? <span className="small error" role="alert">{error}</span>
+      {error ? <span className="small error" role="alert">
+          {error}{onRetry && <>{' '}<button type="button" className="btn" onClick={onRetry}>Try again</button></>}
+        </span>
         : loading || !selection ? <span className="small muted">Loading detections…</span>
         : <>
           <ul aria-label={title}>

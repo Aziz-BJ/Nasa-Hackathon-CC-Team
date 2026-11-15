@@ -21,7 +21,7 @@ describe('toHash and parseHash', () => {
     const s = { ...base, area: areaFromRegion(m, FIX_OUTLINES, 'aa'), from: '2019-03', to: '2020-10' }
     const h = toHash(s)
     expect(h).toBe('#area=region:aa&from=2019-03&to=2020-10&src=harmonized')
-    expect(parseHash(h)).toEqual({ regionKey: 'aa', from: '2019-03', to: '2020-10', source: 'harmonized' })
+    expect(parseHash(h)).toEqual({ regionKey: 'aa', from: '2019-03', to: '2020-10', source: 'harmonized', detections: false })
   })
   it('round-trips a group by its group id, not its regions', () => {
     const s = { ...base, area: areaFromRegion(m, FIX_OUTLINES, 'ab') }
@@ -53,10 +53,17 @@ describe('toHash and parseHash', () => {
     expect(parseHash(toHash(on)).detections).toBe(true)
     expect(applyUrl(m, FIX_OUTLINES, { detections: true }, base).detections.show).toBe(true)
     expect(applyUrl(m, FIX_OUTLINES, {}, on).detections.show).toBe(true)
+    // A full link made with the layer off, pasted while it is on, turns it off (and keeps the satellite choices).
+    const offLink = parseHash(toHash(base))
+    expect(offLink.detections).toBe(false)
+    const pasted = applyUrl(m, FIX_OUTLINES, offLink, { ...on, detections: { ...on.detections, aqua: false } })
+    expect(pasted.detections).toEqual({ ...on.detections, show: false, aqua: false })
+    // A hand-typed link without src does not touch the layer.
+    expect(parseHash('#from=2019-03').detections).toBeUndefined()
   })
   it('ignores junk', () => {
     // An unknown src goes back to the harmonized record instead of keeping the previous view.
-    expect(parseHash('#area=box:9,9,1,1&from=2020-13&src=nope&view=x')).toEqual({ source: 'harmonized' })
+    expect(parseHash('#area=box:9,9,1,1&from=2020-13&src=nope&view=x')).toEqual({ source: 'harmonized', detections: false })
     expect(parseHash('')).toEqual({})
     expect(parseHash('#area=box:1,2,3&to=2020-1')).toEqual({})
     expect(parseHash('#area=planet:mars')).toEqual({})

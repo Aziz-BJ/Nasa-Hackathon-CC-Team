@@ -115,12 +115,19 @@ export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetc
       }
       return p
     },
-    /** Optional layer: raw detections at native pixel size. Missing or unreadable means the layer is unavailable. */
+    /**
+     * Optional layer: raw detections at native pixel size. Missing (404, or the dev server's HTML fallback) resolves to
+     * null: this build has no detections. A network or server error rejects and is not kept, so the next call tries again.
+     */
     detectionsIndex(): Promise<DetectionsIndex | null> {
       if (!detectionsIndexP) {
-        detectionsIndexP = fetchFn(baseUrl + 'detections/index.json')
-          .then(async (res) => (res.ok && isJson(res) ? ((await res.json()) as DetectionsIndex) : null))
-          .catch(() => null)
+        const p = fetchFn(baseUrl + 'detections/index.json').then(async (res) => {
+          if (res.status === 404 || (res.ok && !isJson(res))) return null
+          if (!res.ok) throw new DataError(`Could not load detections/index.json (HTTP ${res.status})`)
+          return (await res.json()) as DetectionsIndex
+        })
+        detectionsIndexP = p
+        p.catch(() => { if (detectionsIndexP === p) detectionsIndexP = null })
       }
       return detectionsIndexP
     },

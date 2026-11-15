@@ -27,7 +27,8 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
       <p>
         Aqua MODIS has watched fires since July 2002 with 1 km pixels. VIIRS, on Suomi NPP (from 2012) and NOAA-20 (from 2018), has 375 m pixels
         and sees much smaller fires, so it reports several times more. Aqua's orbit has drifted later in the day since July 2021, so it can no longer carry
-        the record on its own. Joining the raw counts where the record changes satellite makes a false jump of 3.3 to 5.4 times in yearly fire activity.
+        the record on its own. Joining the raw counts where the record changes satellite makes a false jump of 3.3 to 5.4 times in yearly fire activity
+        (the team's comparison of the harmonized and naively joined records; the Sensors panel shows the jump for each region).
         This record converts VIIRS to the Aqua MODIS scale instead, so 2025 can be compared with 2005.
       </p>
 
