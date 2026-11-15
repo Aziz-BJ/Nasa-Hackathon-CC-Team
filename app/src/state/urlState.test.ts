@@ -47,7 +47,8 @@ describe('toHash and parseHash', () => {
     expect(parseHash(h)).toMatchObject({ source: 'viirs_snpp', view: 'about' })
   })
   it('ignores junk', () => {
-    expect(parseHash('#area=box:9,9,1,1&from=2020-13&src=nope&view=x')).toEqual({})
+    // An unknown src goes back to the harmonized record instead of keeping the previous view.
+    expect(parseHash('#area=box:9,9,1,1&from=2020-13&src=nope&view=x')).toEqual({ source: 'harmonized' })
     expect(parseHash('')).toEqual({})
     expect(parseHash('#area=box:1,2,3&to=2020-1')).toEqual({})
     expect(parseHash('#area=planet:mars')).toEqual({})

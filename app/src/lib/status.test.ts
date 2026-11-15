@@ -1,7 +1,7 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
 import { FIX_MANIFEST } from '../test/fixtures'
-import { inSpan, monthIndex, monthStatus, sensorsIn, seriesSpan, sourceCode, sourceOf, STATUS_LABELS } from './status'
+import { inSpan, monthIndex, monthStatus, noVerdictReason, sensorsIn, seriesSpan, sourceCode, sourceOf, STATUS_LABELS } from './status'
 
 const m = FIX_MANIFEST // 2019-01..2020-12, nrt from 2020-10, 2020-12 month to date, S-NPP from 2019-07, NOAA-20 from 2020-06
 
@@ -92,5 +92,18 @@ describe('sourceOf and sourceCode', () => {
     expect(sourceCode(m, '2020-08')).toBe('converted_noaa20')
     expect(sourceCode(m, '2020-03')).toBe('mixed')
     expect(sourceCode(m, '2020-05')).toBe('measured_aqua') // days without a satellite do not make it mixed
+  })
+})
+
+describe('noVerdictReason', () => {
+  it('gives no verdict to a month with days missing every satellite, only in the harmonized record', () => {
+    expect(monthStatus(m, '2020-05')).toBe('incomplete')
+    expect(noVerdictReason(m, 'harmonized', '2020-05')).toMatch(/no satellite data/)
+    expect(noVerdictReason(m, 'harmonized', '2020-04')).toBeNull()
+  })
+  it('gives no verdict to raw Aqua once its orbit has drifted (July 2021 on)', () => {
+    expect(noVerdictReason(m, 'modis', '2021-06')).toBeNull()
+    expect(noVerdictReason(m, 'modis', '2021-07')).toMatch(/orbit has drifted/)
+    expect(noVerdictReason(m, 'viirs_snpp', '2021-07')).toBeNull()
   })
 })

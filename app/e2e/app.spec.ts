@@ -160,6 +160,30 @@ test.describe('app', () => {
     await expect(page.locator('#drawer')).toContainText('inside the 90% ranges')
   })
 
+  test('the native pixel layer shows raw detections by satellite, with a key', async ({ page }) => {
+    await page.goto('/#area=region:sardinia&from=2021-07&to=2021-08&src=harmonized')
+    await expect(selection(page)).toContainText('Sardinia')
+    await openPanel(page, 'Layers')
+    const sats = page.getByLabel('Aqua MODIS (1 km pixels)')
+    await expect(sats).toBeDisabled()
+    await page.getByLabel('Show every detection at its real pixel size').check()
+    await expect(sats).toBeEnabled()
+    const key = page.locator('.legend-detections')
+    await expect(key).toContainText('raw, not harmonized')
+    await expect(key).toContainText(/S-NPP VIIRS \(375 m\): [1-9]/)
+    await sats.uncheck()
+    await expect(key).toContainText('(hidden)')
+    expect((await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => v.id)).toEqual([])
+  })
+
+  test('an incomplete month and drifted raw Aqua get numbers but no verdict', async ({ page }) => {
+    await expect(page).toHaveTitle(/Spark 1/)
+    await page.goto('/#area=region:sicily&from=2002-07&to=2002-08&src=harmonized')
+    await expect(headline(page)).toContainText('incomplete month, no verdict')
+    await page.goto('/#area=region:sicily&from=2022-01&to=2022-08&src=modis')
+    await expect(headline(page)).toContainText('no verdict (Aqua orbit drift)')
+  })
+
   test('no automatic accessibility violations', async ({ page }) => {
     const scan = async () => (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => `${v.id}: ${v.help}`)
     expect(await scan()).toEqual([])

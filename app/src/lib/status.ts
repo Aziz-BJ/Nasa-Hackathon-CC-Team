@@ -33,6 +33,16 @@ export function monthStatus(m: Manifest, ym: YearMonth, key: SeriesKey = 'harmon
   return 'standard'
 }
 
+/** Aqua's orbit drifts later in the day from this month; the record stops using measured Aqua here (METHOD.md). */
+export const AQUA_DRIFT_FROM: YearMonth = '2021-07'
+
+/** Why a month gets no verdict even though it has a value, or null when a verdict is fair. */
+export function noVerdictReason(m: Manifest, key: SeriesKey, ym: YearMonth): string | null {
+  if (monthStatus(m, ym, key) === 'incomplete') return 'Some days of this month had no satellite data, so it is not compared with full months.'
+  if (key === 'modis' && ym >= AQUA_DRIFT_FROM) return "Aqua's orbit has drifted later in the day since July 2021, so raw Aqua after that is not compared with earlier years."
+  return null
+}
+
 export function sensorsIn(m: Manifest, ym: YearMonth): SensorInfo[] {
   return m.sensors.filter((s) => inSpan(ym, [s.first_month, s.last_month]))
 }

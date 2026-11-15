@@ -35,7 +35,9 @@ and raw counts matched in 1,172 of 1,172 region-months.
 | `regions.json` | 31 KB | at start |
 | `outlines.json` | 88 KB | at start (optional: without it, regions are drawn as boxes) |
 | `cells/<region>.json` | 0.1 to 2 MB (1 MB gzipped in all) | when an area touches the region |
-| `reported.json` | optional | ground-reported fires; the Reported panel shows only if it exists |
+| `reported.json` | optional (shipped empty) | ground-reported fires; the Reported panel shows only for regions listed in it |
+| `detections/index.json` | 5 KB | at start (optional: without it, the detections switch is disabled) |
+| `detections/<region>/<year>.json` | 43 MB in all, 100 files; California 2020 is the largest (2.0 MB gzipped) | only while the detections layer is on, for the regions the area touches and the years of the chosen months |
 
 ### manifest.json
 
@@ -101,6 +103,49 @@ The harmonized value follows Pierre's source rule day by day:
 
 So a whole region always shows Pierre's numbers, and a drawn shape inside a region is an estimate: the region's conversion applied to
 part of it. The app says so and shows no 90% range for drawn shapes.
+
+## Detections at native pixel size (optional layer)
+
+Raw cleaned FIRMS detections, one dot per pixel centre, for the Layers switch "Detections at native pixel size". **Raw data, not
+harmonized:** VIIRS sees many more, smaller fires than Aqua MODIS, so counts are not comparable between sensors. The layer never changes
+the record, the cells or any number in the panels.
+
+Written by a separate importer from Andrea's `detections_clean.parquet` (v1.1 run, inside `SpaceApps2026_Andrea_intermediate_data.zip`):
+
+```bash
+cd app
+npm run import-detections -- --parquet <path to detections_clean.parquet>
+#   --out <folder>   (default public/data/real/detections)
+```
+
+It reads `last_day` from `public/data/real/manifest.json` and drops rows dated after it (an incomplete day, as in the record), then
+rewrites the folder. On the 15 Nov run: 1,631,147 rows read, 25 dated 14 Nov 2026 dropped; AQUA 181,766, SNPP 858,332, NOAA20 591,024;
+100 region-year files.
+
+`detections/index.json`:
+
+```json
+{ "schema_version": 1, "last_day": "2026-11-13", "satellites": ["AQUA", "SNPP", "NOAA20"],
+  "regions": { "sicily": { "2021": [1026, 5195, 5404] } } }
+```
+
+`regions.<region>.<year>` is the count per satellite in that file (AQUA, SNPP, NOAA20).
+
+`detections/<region>/<year>.json` holds parallel arrays, sorted by day, then satellite, then position:
+
+| Key | Meaning |
+|---|---|
+| `region`, `year` | the file's region id and calendar year (from the local solar date) |
+| `lon0`, `lat0` | origin in degrees: the file's smallest longitude and latitude, rounded down to 0.01° |
+| `s` | satellite index × 2, plus 1 at night: AQUA 0/1, SNPP 2/3, NOAA20 4/5 |
+| `d` | day of the year from `date_local`, 0 = 1 January |
+| `x`, `y` | offsets from `lon0` / `lat0` in 1e-4 degrees (about 10 m), so longitude = `lon0 + x / 1e4` |
+| `w`, `h` | FIRMS `scan` and `track` pixel sizes in units of 10 m (km × 100) |
+| `p` | fire radiative power, MW, rounded |
+
+The app keeps every row of a whole region's file and tests pixel centres against a drawn shape or typed box. Above 150,000 dots it thins
+the selection evenly and the key says how many are drawn. Each dot is drawn with a radius of half the pixel's scan width at the current
+zoom (with a minimum size, so dots stay visible when zoomed out).
 
 ## Rules the app relies on
 

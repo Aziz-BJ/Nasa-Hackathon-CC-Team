@@ -34,7 +34,8 @@ export function parseHash(hash: string): UrlState {
   if (from && YM.test(from)) out.from = from
   if (to && YM.test(to)) out.to = to
   const src = q.get('src')
-  if (src && (SERIES_KEYS as readonly string[]).includes(src)) out.source = src as SeriesKey
+  // An unknown src falls back to the harmonized record rather than keeping whatever was shown before.
+  if (src) out.source = (SERIES_KEYS as readonly string[]).includes(src) ? src as SeriesKey : 'harmonized'
   if (q.get('view') === 'about') out.view = 'about'
   return out
 }

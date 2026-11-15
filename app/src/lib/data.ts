@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // The only place that knows file names and shapes (contract version 2, docs/DATA_CONTRACT.md).
-import { ENTRY_STRIDE, type CellFile, type Manifest, type RegionsFile, type ReportedFile } from './types'
+import { ENTRY_STRIDE, type CellFile, type DetectionsFile, type DetectionsIndex, type Manifest, type RegionsFile, type ReportedFile } from './types'
 
 type FetchFn = (url: string) => Promise<Response>
 
@@ -87,6 +87,8 @@ function isJson(res: Response): boolean {
 
 export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetch(u)) {
   const cells = new Map<string, Promise<LoadedCells>>()
+  const detectionFiles = new Map<string, Promise<DetectionsFile>>()
+  let detectionsIndexP: Promise<DetectionsIndex | null> | null = null
 
   async function getJson<T>(path: string): Promise<T> {
     const res = await fetchFn(baseUrl + path)
@@ -110,6 +112,25 @@ export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetc
         p = getJson<CellFile>(`cells/${region}.json`).then(indexCells)
         cells.set(region, p)
         p.catch(() => cells.delete(region))
+      }
+      return p
+    },
+    /** Optional layer: raw detections at native pixel size. Missing or unreadable means the layer is unavailable. */
+    detectionsIndex(): Promise<DetectionsIndex | null> {
+      if (!detectionsIndexP) {
+        detectionsIndexP = fetchFn(baseUrl + 'detections/index.json')
+          .then(async (res) => (res.ok && isJson(res) ? ((await res.json()) as DetectionsIndex) : null))
+          .catch(() => null)
+      }
+      return detectionsIndexP
+    },
+    detections(region: string, year: number): Promise<DetectionsFile> {
+      const key = `${region}/${year}`
+      let p = detectionFiles.get(key)
+      if (!p) {
+        p = getJson<DetectionsFile>(`detections/${key}.json`)
+        detectionFiles.set(key, p)
+        p.catch(() => detectionFiles.delete(key))
       }
       return p
     },

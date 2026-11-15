@@ -74,6 +74,19 @@ describe('KpiRow, a finished month', () => {
     expect(screen.getByText('Not enough baseline years to compare.')).toBeInTheDocument()
     expect(screen.getAllByText('n/a').length).toBeGreaterThanOrEqual(3)
   })
+  it('shows why a month gets no verdict when there is a reason', () => {
+    const sum = { ...summarizeMonth(series, months, '2006-08', BASE), verdict: null }
+    render(<KpiRow {...props({ focus: sum, noVerdictReason: 'Some days of this month had no satellite data.' })} />)
+    expect(screen.getByText('Some days of this month had no satellite data.')).toBeInTheDocument()
+    expect(screen.queryByText('Not enough baseline years to compare.')).not.toBeInTheDocument()
+  })
+  it('names the years actually compared when a raw sensor starts after the baseline does', () => {
+    // Like S-NPP: no data before 2005, so the 2003-2025 baseline really uses 2005-2009 for August 2010 (span shown 2005 to 2010).
+    const long = monthRange('2003-01', '2010-12')
+    const late = long.map((ym) => (ym < '2005-01' ? null : ym.endsWith('-08') ? Number(ym.slice(0, 4)) - 2000 : 1))
+    render(<KpiRow {...props({ focus: summarizeMonth(late, long, '2010-08', [2003, 2025]), baselineYears: [2003, 2025], ytd: null })} />)
+    expect(screen.getByText(/Compared with 2005 to 2010, leaving out 2010/)).toBeInTheDocument()
+  })
   it('prints n/a for a month with no value and for a missing total', () => {
     render(<KpiRow {...props({ total: null, monthsWithData: 0, focus: summarizeMonth(series, months, '2010-08', BASE), ytd: null })} />)
     expect(screen.getAllByText('n/a').length).toBeGreaterThanOrEqual(4)

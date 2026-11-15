@@ -63,6 +63,15 @@ export const MAP_STYLE: StyleSpecification = {
   ],
 }
 
+// Detections: one dot per pixel centre, coloured by satellite (Okabe-Ito, as in the Sensors chart).
+// Radius = half the pixel width in screen pixels (k * 2^zoom, k set per detection), never below a visible minimum,
+// so dots grow to the true pixel size as you zoom in and Aqua MODIS dots stay bigger than VIIRS dots.
+const DETECTION_COLOR: ExpressionSpecification = ['match', ['get', 's'], 0, '#E69F00', 1, '#56B4E9', '#009E73']
+const MIN_RADIUS: ExpressionSpecification = ['case', ['==', ['get', 's'], 0], 2.4, 1.5]
+const DETECTION_RADIUS = ['interpolate', ['exponential', 2], ['zoom'],
+  ...[1, 4, 6, 8, 10, 12, 14, 16].flatMap((z) => [z, ['max', MIN_RADIUS, ['*', ['get', 'k'], 2 ** z]]]),
+] as unknown as ExpressionSpecification
+
 const TOOL_LABEL: Record<Exclude<DrawTool, 'pan'>, string> = {
   circle: 'Drawn circle', rectangle: 'Drawn rectangle', polygon: 'Drawn polygon', freehand: 'Drawn freehand area',
 }
@@ -76,13 +85,19 @@ export interface GlobeMapProps {
   basemap: Basemap
   /** Country borders and place names. */
   labels: boolean
+  /** Raw detections at native pixel size (properties: s = satellite index, k = radius factor). Empty when the layer is off. */
+  detections?: GeoJSON.FeatureCollection
+  /** Fade the 5 km cells so the detections on top stay readable. */
+  dimCells?: boolean
   /** Called once when the user finishes drawing a shape. */
   onDrawn: (area: Area) => void
   /** Called with a region id when the user clicks a region while moving the globe. */
   onRegionClick: (id: string) => void
 }
 
-export function GlobeMap({ area, cells, regions, tool, basemap, labels, onDrawn, onRegionClick }: GlobeMapProps) {
+const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
+
+export function GlobeMap({ area, cells, regions, tool, basemap, labels, detections = EMPTY, dimCells = false, onDrawn, onRegionClick }: GlobeMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
@@ -128,6 +143,11 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, onDrawn,
       map.addSource('cells', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.8 } }, 'borders')
       map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#000000', 'line-opacity': 0.35, 'line-width': 0.5 } }, 'borders')
+      // Above the 5 km cells, below borders, labels and the area outline.
+      map.addSource('detections', { type: 'geojson', data: EMPTY })
+      map.addLayer({ id: 'detections', type: 'circle', source: 'detections',
+        paint: { 'circle-color': DETECTION_COLOR, 'circle-radius': DETECTION_RADIUS, 'circle-opacity': 0.85,
+          'circle-stroke-color': '#000000', 'circle-stroke-opacity': 0.6, 'circle-stroke-width': 0.6 } }, 'borders')
       map.addSource('area', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       // White outline on a dark casing: readable over imagery and over every ramp colour.
       map.addLayer({ id: 'area-casing', type: 'line', source: 'area', paint: { 'line-color': '#000000', 'line-opacity': 0.55, 'line-width': 6 } })
@@ -177,6 +197,17 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, onDrawn,
   useEffect(() => {
     if (ready) (mapRef.current?.getSource('cells') as GeoJSONSource | undefined)?.setData(cells)
   }, [ready, cells])
+
+  useEffect(() => {
+    if (ready) (mapRef.current?.getSource('detections') as GeoJSONSource | undefined)?.setData(detections)
+  }, [ready, detections])
+
+  useEffect(() => {
+    const map = mapRef.current
+    if (!ready || !map) return
+    map.setPaintProperty('cells', 'fill-opacity', dimCells ? 0.3 : 0.8)
+    map.setPaintProperty('cells-outline', 'line-opacity', dimCells ? 0.12 : 0.35)
+  }, [ready, dimCells])
 
   useEffect(() => {
     const map = mapRef.current

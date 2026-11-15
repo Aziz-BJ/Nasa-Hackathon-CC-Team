@@ -26,7 +26,7 @@ export function ExportButton({ manifest, area, series, i0, i1 }: {
     <div>
       <p>Monthly fire cell-days for this area and these months ({series.months[i0]} to {series.months[i1]}): the harmonized record{series.low ? ' with its 90% range' : ''}, the raw count of every satellite, the source of each month, the comparison with {manifest.baseline_years[0]} to {manifest.baseline_years[1]}, and a header saying how it was made.</p>
       <button type="button" className="btn btn-primary" onClick={download}><DownloadSimple aria-hidden /> Download CSV</button>
-      <p className="small muted" style={{ marginTop: '0.75rem' }}>Every chart (Trends, Sensors, Reported) also has a "Download image" button.</p>
+      <p className="small muted" style={{ marginTop: '0.75rem' }}>Every chart also has a "Download image" button.</p>
       <h3 style={{ marginTop: '1.25rem' }}>Share this view</h3>
       <p className="small">The link keeps the area, months and data source.</p>
       <label className="small">Link<input type="text" readOnly value={window.location.href} onFocus={(e) => e.target.select()} style={{ width: '100%' }} /></label>

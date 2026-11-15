@@ -34,6 +34,9 @@ describe('appState', () => {
     expect(reducer(s0, { type: 'setBasemap', basemap: 'night' }).basemap).toBe('night')
     expect(reducer(s0, { type: 'setLabels', labels: false }).labels).toBe(false)
     expect(reducer(s0, { type: 'setView', view: 'about' }).view).toBe('about')
+    expect(s0.detections.show).toBe(false)
+    const det = { show: true, aqua: false, snpp: true, noaa20: true }
+    expect(reducer(s0, { type: 'setDetections', detections: det }).detections).toEqual(det)
   })
   it('opens a region from a link, then a box, and ignores an unknown region', () => {
     const s0 = initialState(m)

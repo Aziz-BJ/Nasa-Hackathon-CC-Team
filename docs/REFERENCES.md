@@ -33,6 +33,7 @@ The app runs on the team's real harmonized record (`pipeline/harmonized_outputs_
 | d3-scale-chromatic | 3.1.1 | ISC (includes ColorBrewer schemes, Apache-2.0) | https://d3js.org/d3-scale-chromatic |
 | Turf: @turf/area, bbox, bbox-polygon, boolean-point-in-polygon, circle | 7.4.0 | MIT | https://turfjs.org |
 | Phosphor Icons (React) | 2.1.10 | MIT | https://phosphoricons.com |
+| hyparquet (import-detections only, not in the app bundle) | 1.33.0 | MIT | https://github.com/hyparam/hyparquet |
 | Vitest | 5.1.0 | MIT | https://vitest.dev |
 | jsdom | 31.0.1 | MIT | https://github.com/jsdom/jsdom |
 | Testing Library: react, jest-dom, user-event | 16.3.3, 7.0.1, 14.6.10 | MIT | https://testing-library.com |

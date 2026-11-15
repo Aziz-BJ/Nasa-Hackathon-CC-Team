@@ -1,9 +1,9 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import type { Area } from '../lib/area'
 import type { AreaData } from '../hooks/useAreaData'
-import type { Manifest } from '../lib/types'
+import { SERIES_LABELS, type Manifest, type SeriesKey } from '../lib/types'
 
-export function AreaSummary({ area, data, manifest: m }: { area: Area | null; data: AreaData; manifest: Manifest }) {
+export function AreaSummary({ area, data, manifest: m, source = 'harmonized' }: { area: Area | null; data: AreaData; manifest: Manifest; source?: SeriesKey }) {
   if (!area) return <p className="muted">No area chosen yet. Choose a region, draw on the globe, or type coordinates.</p>
   const km2 = Math.round(area.areaKm2).toLocaleString('en-GB')
   const names = m.regions.map((r) => r.name)
@@ -12,7 +12,9 @@ export function AreaSummary({ area, data, manifest: m }: { area: Area | null; da
   return (
     <div aria-live="polite">
       <p><strong>{area.label}</strong>: {km2} km². {cells}</p>
-      {area.regionIds
+      {area.regionIds && source !== 'harmonized'
+        ? <p className="small muted">Numbers are the raw {SERIES_LABELS[source].replace(' only (raw)', '')} count for the region: no conversion and no range. Raw counts from different sensors are not comparable.</p>
+        : area.regionIds
         ? <p className="small muted">{data.series?.bandSummed
           ? "Numbers come straight from the harmonized record, added over the regions. The range shown adds the regions' 90% ranges, so it is usually wider than the true range for the regions together."
           : 'Numbers come straight from the harmonized record, with its 90% range.'}</p>
