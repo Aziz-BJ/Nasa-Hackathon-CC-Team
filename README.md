@@ -1,11 +1,14 @@
-# Nasa Hackathon CC-Team: MODIS + VIIRS Hot Spots
+# Spark 1: MODIS and VIIRS hot spots on one scale
 
 Team project for the NASA International Space Apps Challenge 2026, challenge
 **Harmonization of MODIS and VIIRS Hot Spots**.
 
+**Live app: https://nasa-hackathon-spark1.vercel.app** (no login, on a computer or a phone).
+
 A public web tool, built on a harmonized MODIS + VIIRS fire record from NASA FIRMS, that shows a consistent monthly
 burning calendar from July 2002 to now for four study regions (mainland Italy, Sicily, Sardinia, California), where the
-fires were on a 5 km grid, and how the latest month compares with 2003 to 2025.
+fires were on a 5 km grid, and how the latest month compares with 2003 to 2025. An optional layer shows every raw detection
+at its native pixel size (Aqua MODIS 1 km, VIIRS 375 m), and the Download panel exports them as a CSV.
 
 This is a historical record of satellite detections, not a warning system.
 
@@ -26,8 +29,8 @@ Tests, builds and how to refresh the data: [app/README.md](app/README.md).
 
 ```
 /app        The web app (React + MapLibre globe), with the real data in app/public/data/real/
-/pipeline   The pipeline outputs the app is built from: Pierre's harmonized record, method and validation
-            (harmonized_outputs_REAL/) and Andrea's region outlines (region_outlines/). See pipeline/README.md.
+/pipeline   The pipeline the app is built from: Andrea's cleaning code (cleaning/) and region outlines (region_outlines/),
+            and Pierre's harmonized record, method and validation (harmonized_outputs_REAL/). See pipeline/README.md.
 /docs       REFERENCES.md, AI_USE.md, DATA_CONTRACT.md (pipeline → app format), plans/
 ```
 
