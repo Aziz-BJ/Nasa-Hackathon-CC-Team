@@ -1,4 +1,4 @@
-# Hotspot Calendar
+# Spark 1 (web app)
 
 A map-first web app for the NASA Space Apps 2026 challenge **Harmonization of MODIS and VIIRS Hot Spots**.
 It shows the team's harmonized fire record for mainland Italy, Sicily, Sardinia and California on a 3D globe: a monthly burning

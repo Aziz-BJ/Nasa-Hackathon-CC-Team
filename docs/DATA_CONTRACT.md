@@ -1,4 +1,4 @@
-# Data contract: pipeline → Hotspot Calendar app (version 2)
+# Data contract: pipeline → Spark 1 app (version 2)
 
 What the app reads from `app/public/data/<name>/`. Since 15 Nov 2026 it is written by the importer, not by hand:
 

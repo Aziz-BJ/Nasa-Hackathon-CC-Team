@@ -1,14 +1,14 @@
 # References
 
-Every dataset, service, library and source used by the Hotspot Calendar app, with its licence or terms.
+Every dataset, service, library and source used by Spark 1 (the app and the pipeline), with its licence or terms.
 Library versions are the exact ones in `app/package-lock.json`.
 
 ## Data, imagery and map services
 
 | Source | What we use | Licence / terms | URL |
 | --- | --- | --- | --- |
-| NASA FIRMS | MODIS Collection 6.1 active fire, 1 km (the record uses Aqua only) | NASA open data, no restriction on use; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
-| NASA FIRMS | VIIRS 375 m active fire (Suomi NPP, NOAA-20) | NASA open data, no restriction on use; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
+| NASA FIRMS | MODIS Collection 6.1 active fire, 1 km (the record uses Aqua only). Standard: MYD14 C6.1, doi:10.5067/MODIS/MYD14.061; near real-time: MCD14DL C6.1, doi:10.5067/FIRMS/MODIS/MCD14DL.NRT.0061 | NASA open data, no restriction on use; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
+| NASA FIRMS | VIIRS 375 m active fire. Suomi NPP standard: VNP14IMG v2, doi:10.5067/VIIRS/VNP14IMG.002; NRT: VNP14IMGT, doi:10.5067/FIRMS/VIIRS/VNP14IMGT_NRT.002. NOAA-20 standard: VJ114IMG v2, doi:10.5067/VIIRS/VJ114IMG.002; NRT: VJ114IMGT, doi:10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002 | NASA open data, no restriction on use; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
 | ISTAT, via openpolis/geojson-italy | Italian region boundaries (Andrea's region outlines) | Italian official statistics; credit ISTAT. Terms in the openpolis/geojson-italy repository | https://github.com/openpolis/geojson-italy |
 | US Census Bureau TIGER 2010, via jgoodall/us-maps | California state boundary (includes its 3 nautical miles of state waters) | US Government work; credit US Census Bureau | https://www.census.gov/geographies/mapping-files.html |
 | Natural Earth 1:10m admin-0 | Neighbouring countries, so Italy's sea margin never claims foreign land | Public domain | https://www.naturalearthdata.com |
@@ -41,6 +41,24 @@ The app runs on the team's real harmonized record (`pipeline/harmonized_outputs_
 | axe-core for Playwright | 4.14.0 | MPL-2.0 | https://github.com/dequelabs/axe-core-npm |
 | oxlint | 1.93.0 | MIT | https://oxc.rs |
 | @types/* (d3-scale, d3-scale-chromatic, node, react, react-dom) | see lockfile | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
+
+## Pipeline software (Python)
+
+Used by Andrea's cleaning pipeline (`pipeline/cleaning/`) and Pierre's harmonization. Licences as declared on PyPI (checked 15 Nov 2026).
+
+| Library | Used for | Licence | URL |
+| --- | --- | --- | --- |
+| NumPy | arrays and maths | BSD-3-Clause | https://numpy.org |
+| pandas | tables | BSD-3-Clause | https://pandas.pydata.org |
+| SciPy | statistics and spatial lookups | BSD-3-Clause | https://scipy.org |
+| statsmodels | regression models (harmonization) | BSD-3-Clause | https://www.statsmodels.org |
+| pyproj | equal-area grid projections (EPSG:3035, EPSG:3310) | MIT | https://pyproj4.github.io/pyproj |
+| Shapely | region outlines and the sea margin | BSD-3-Clause | https://shapely.readthedocs.io |
+| pvlib | solar position (local solar day, day or night) | BSD-3-Clause | https://pvlib-python.readthedocs.io |
+| PyArrow | Parquet files | Apache-2.0 | https://arrow.apache.org |
+| Matplotlib | figures | Matplotlib licence (PSF-based, permissive) | https://matplotlib.org |
+| tabulate | text tables in reports | MIT | https://github.com/astanin/python-tabulate |
+| DuckDB | independent validation queries | MIT | https://duckdb.org |
 
 ## Colour, design and accessibility
 

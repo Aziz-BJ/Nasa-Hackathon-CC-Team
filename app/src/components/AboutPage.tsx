@@ -98,6 +98,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
 
       <h2>Limits</h2>
       <ul>
+        <li>Each FIRMS detection (hotspot) is a thermal anomaly: a satellite pixel flagged as hotter than its surroundings, usually a fire but not a confirmed one. The cleaning removes volcanoes, industrial sites and other static heat sources, but some non-fire heat can remain.</li>
         <li>Fire cell-days measure observed burning activity, not burned area or number of fires. Zero detections is not "no fire": cloud, smoke and gaps between passes hide fires.</li>
         <li>They measure spread, not intensity: one catastrophic fire fills few cells. Sardinia's July 2021 (the Montiferru fire) ranks 8th of 25 Julys.</li>
         <li>A single converted month is uncertain: half the width of its 90% range is typically about ±35% of the value in California and Sicily and ±75% in mainland Italy, and wider in Sardinia and in quiet months.</li>
@@ -117,7 +118,15 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
 
       <h2>Data and credits</h2>
       <ul>
-        <li>Fire detections: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>, MODIS Collection 6.1 (Aqua) and VIIRS 375 m (Suomi NPP, NOAA-20).</li>
+        <li>
+          Fire detections: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>, MODIS Collection 6.1 (Aqua) and VIIRS 375 m (Suomi NPP, NOAA-20).
+          Standard data come from the swath products MYD14 C6.1 (<a href="https://doi.org/10.5067/MODIS/MYD14.061">doi:10.5067/MODIS/MYD14.061</a>),
+          VNP14IMG v2 (<a href="https://doi.org/10.5067/VIIRS/VNP14IMG.002">doi:10.5067/VIIRS/VNP14IMG.002</a>) and VJ114IMG v2
+          (<a href="https://doi.org/10.5067/VIIRS/VJ114IMG.002">doi:10.5067/VIIRS/VJ114IMG.002</a>); near real-time data from MCD14DL C6.1
+          (<a href="https://doi.org/10.5067/FIRMS/MODIS/MCD14DL.NRT.0061">doi:10.5067/FIRMS/MODIS/MCD14DL.NRT.0061</a>), VNP14IMGT
+          (<a href="https://doi.org/10.5067/FIRMS/VIIRS/VNP14IMGT_NRT.002">doi:10.5067/FIRMS/VIIRS/VNP14IMGT_NRT.002</a>) and VJ114IMGT
+          (<a href="https://doi.org/10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002">doi:10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002</a>).
+        </li>
         <li>
           We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS)
           (<a href="https://earthdata.nasa.gov/firms">https://earthdata.nasa.gov/firms</a>), part of NASA's Land, Atmosphere Near real-time Capability for

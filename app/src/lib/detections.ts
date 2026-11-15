@@ -106,10 +106,16 @@ export function yearsToLoad(available: string[], from: YearMonth, to: YearMonth)
 const SAT_NAMES = ['Aqua', 'Suomi NPP', 'NOAA-20'] as const
 const PRODUCTS = ['MODIS Collection 6.1 active fire (1 km)', 'VIIRS 375 m active fire (Collection 2)', 'VIIRS 375 m active fire (Collection 2)'] as const
 const VIIRS_CONF = ['', 'l', 'n', 'h'] as const
+/** DOI of each satellite's product: [standard, near real-time]. Each resolves to its NASA Earthdata page (checked 15 Nov 2026). */
+const DOIS = [
+  ['10.5067/MODIS/MYD14.061', '10.5067/FIRMS/MODIS/MCD14DL.NRT.0061'],
+  ['10.5067/VIIRS/VNP14IMG.002', '10.5067/FIRMS/VIIRS/VNP14IMGT_NRT.002'],
+  ['10.5067/VIIRS/VJ114IMG.002', '10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002'],
+] as const
 
 export const HOTSPOT_COLUMNS = [
   'latitude', 'longitude', 'acq_date_utc', 'acq_time_utc', 'local_solar_date', 'satellite', 'instrument', 'daynight',
-  'confidence', 'frp_mw', 'scan_km', 'track_km', 'data_version', 'product', 'region',
+  'confidence', 'frp_mw', 'scan_km', 'track_km', 'data_version', 'product', 'doi', 'region',
 ] as const
 
 const pad = (n: number, w = 2) => String(n).padStart(w, '0')
@@ -133,7 +139,7 @@ export function hotspotsCsv(m: Manifest, files: DetectionsFile[], area: Area, fr
       lat.toFixed(4), lon.toFixed(4), isoDay(utc), pad(time.getUTCHours()) + pad(time.getUTCMinutes()), isoDay(local),
       SAT_NAMES[sat], sat === 0 ? 'MODIS' : 'VIIRS', f.s[i] & 1 ? 'N' : 'D',
       sat === 0 ? String(f.c[i]) : VIIRS_CONF[f.c[i]] ?? '', String(f.p[i]), (f.w[i] / 100).toFixed(2), (f.h[i] / 100).toFixed(2),
-      f.q[i] ? 'NRT' : 'SP', PRODUCTS[sat], f.region,
+      f.q[i] ? 'NRT' : 'SP', PRODUCTS[sat], DOIS[sat][f.q[i] ? 1 : 0], f.region,
     ].join(','))
   })
   const [w, s, e, n] = area.bbox.map((x) => Math.round(x * 1000) / 1000)
@@ -148,6 +154,7 @@ export function hotspotsCsv(m: Manifest, files: DetectionsFile[], area: Area, fr
     '# FRP and confidence are not comparable between sensors either. confidence: MODIS 0-100 (%); VIIRS l (low), n (nominal), h (high).',
     '# acq_date_utc, acq_time_utc: satellite overpass in UTC (FIRMS acq_date, acq_time, HHMM). local_solar_date: the day the record counts the detection on.',
     '# data_version: SP = standard processing; NRT = near real-time, provisional (may change when standard data replace it).',
+    '# doi: the product each row comes from. Standard: MYD14 C6.1, VNP14IMG v2, VJ114IMG v2 (swath products behind the FIRMS archive); near real-time: MCD14DL C6.1, VNP14IMGT, VJ114IMGT (FIRMS NRT).',
     '# Cleaning (pipeline v1.1): duplicates removed; detections FIRMS flags as volcanoes, static land sources or offshore removed, plus Etna and Stromboli and everything within 1 km of 1,311 recurring heat sources;'
       + ' MODIS confidence below 30% and VIIRS low confidence removed; repeat detections of the same fire from overlapping pixels or orbits removed.',
     '# Positions are rounded to 0.0001 degrees (about 10 m), FRP to 1 MW, scan and track (pixel size along scan and track, km) to 10 m.',

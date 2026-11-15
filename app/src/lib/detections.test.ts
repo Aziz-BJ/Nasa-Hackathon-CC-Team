@@ -91,6 +91,7 @@ describe('hotspotsCsv', () => {
     expect([col(aquaNight, 'acq_date_utc'), col(aquaNight, 'acq_time_utc'), col(aquaNight, 'local_solar_date')]).toEqual(['2020-02-14', '2300', '2020-02-15'])
     expect([col(aquaNight, 'satellite'), col(aquaNight, 'instrument'), col(aquaNight, 'daynight'), col(aquaNight, 'confidence')]).toEqual(['Aqua', 'MODIS', 'N', '45'])
     expect([col(noaa, 'satellite'), col(noaa, 'confidence'), col(noaa, 'data_version'), col(noaa, 'local_solar_date')]).toEqual(['NOAA-20', 'n', 'NRT', '2020-12-31'])
+    expect([col(aquaDay, 'doi'), col(noaa, 'doi')]).toEqual(['10.5067/MODIS/MYD14.061', '10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002'])
     expect([col(noaa, 'frp_mw'), col(noaa, 'scan_km'), col(noaa, 'track_km')]).toEqual(['1', '0.39', '0.36'])
   })
   it('says what the rows are and credits FIRMS in the header', () => {
