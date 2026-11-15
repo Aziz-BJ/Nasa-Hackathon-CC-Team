@@ -15,17 +15,17 @@ This is a historical record of satellite detections, not a warning system.
 ## Run the app
 
 ```bash
-cd demo
+cd app
 npm install
 npm run dev        # http://localhost:5173
 ```
 
-Tests, builds and how to refresh the data: [demo/README.md](demo/README.md).
+Tests, builds and how to refresh the data: [app/README.md](app/README.md).
 
 ## Repository layout
 
 ```
-/demo       The web app (React + MapLibre globe), with the real data in demo/public/data/real/
+/app        The web app (React + MapLibre globe), with the real data in app/public/data/real/
 /pipeline   The pipeline outputs the app is built from: Pierre's harmonized record, method and validation
             (harmonized_outputs_REAL/) and Andrea's region outlines (region_outlines/). See pipeline/README.md.
 /docs       REFERENCES.md, AI_USE.md, DATA_CONTRACT.md (pipeline → app format), plans/

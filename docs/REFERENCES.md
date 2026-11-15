@@ -1,7 +1,7 @@
 # References
 
 Every dataset, service, library and source used by the Hotspot Calendar app, with its licence or terms.
-Library versions are the exact ones in `demo/package-lock.json`.
+Library versions are the exact ones in `app/package-lock.json`.
 
 ## Data, imagery and map services
 

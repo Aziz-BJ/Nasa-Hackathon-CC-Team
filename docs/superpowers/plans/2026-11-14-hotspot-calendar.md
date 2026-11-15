@@ -1,4 +1,6 @@
-# Hotspot Calendar Demo Implementation Plan
+# Hotspot Calendar: first implementation plan (prototype)
+
+> Historical plan for the first prototype on mock data. The app folder it calls `demo/` is now `app/` (renamed 15 Nov 2026), and the app runs on the real record: see [2026-11-15-real-data.md](2026-11-15-real-data.md).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 

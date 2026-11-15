@@ -1,6 +1,6 @@
 # Pipeline outputs used by the app
 
-The app's data (`demo/public/data/real/`) is built from these files by `demo/scripts/import-data.ts`
+The app's data (`app/public/data/real/`) is built from these files by `app/scripts/import-data.ts`
 (see [docs/DATA_CONTRACT.md](../docs/DATA_CONTRACT.md)).
 
 | Folder | From | What |
@@ -14,7 +14,7 @@ satellite × day/night), the six FIRMS archive downloads and the intermediate fi
 `SpaceApps2026_Andrea_intermediate_data.zip`. To rebuild the app's data:
 
 ```bash
-cd demo
+cd app
 npm run import-data -- --cells <path to cell_days.csv>
 ```
 

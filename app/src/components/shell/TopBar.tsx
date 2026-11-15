@@ -3,7 +3,7 @@
 import { FireSimple, Info, Question } from '@phosphor-icons/react'
 
 export interface TopBarProps {
-  /** Short description of the current area and months, e.g. "United Kingdom (mock), Jan 2022 – Oct 2026". */
+  /** Short description of the current area and months, e.g. "Sicily, Jan 2023 – Dec 2023". */
   selection: string
   onSelectionClick: () => void
   onGuide: () => void
