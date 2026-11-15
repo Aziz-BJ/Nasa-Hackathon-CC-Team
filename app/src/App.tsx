@@ -2,23 +2,18 @@
 // Map-first layout: the globe fills the screen; feature boxes around it open side drawers;
 // the bottom strip holds the legend, a one-line verdict and "More info".
 import { CalendarBlank, ChartLine, DownloadSimple, FireSimple, Info, MapPin, Planet, Stack, Table } from '@phosphor-icons/react'
-import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
 import { AboutPage } from './components/AboutPage'
-import { AnomalyChart } from './components/AnomalyChart'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
 import { BurningCalendar } from './components/BurningCalendar'
 import { DisplayOptions } from './components/DisplayOptions'
 import { ExportButton } from './components/ExportButton'
 import { FactorTable } from './components/FactorTable'
-import { GlobeMap } from './components/GlobeMap'
 import { diff, KpiRow } from './components/KpiRow'
 import { DetectionsLegend } from './components/DetectionsLegend'
 import { CompactLegend, Legend, VerdictKey } from './components/Legend'
 import { MockBanner } from './components/MockBanner'
-import { OverlapChart } from './components/OverlapChart'
-import { ReportedChart } from './components/ReportedChart'
-import { SeasonalChart } from './components/SeasonalChart'
 import { BottomStrip } from './components/shell/BottomStrip'
 import { Drawer } from './components/shell/Drawer'
 import { FeatureRail, type FeatureBox } from './components/shell/FeatureRail'
@@ -39,15 +34,46 @@ import { saveFile } from './lib/download'
 import { calendarMedians, compareWith, summarizeMonth, summarizeMtd, VERDICT_LABELS, yearToDate, type MonthSummary, type VerdictLevel } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, regionsToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm, monthRange, MONTH_LONG, parseYm, type YearMonth } from './lib/months'
-import { comparableValues, monthIndex, monthStatus, noVerdictReason, sensorsIn, sourceCode, sourceOf } from './lib/status'
+import { comparableValues, monthIndex, monthStatus, noVerdictReason, sensorsIn, seriesSpan, sourceCode, sourceOf } from './lib/status'
 import { SERIES_LABELS, type DetectionsFile, type DetectionsIndex, type Manifest, type RegionsFile, type ReportedFile, type SeriesKey } from './lib/types'
 import { initialState, reducer, type AppState } from './state/appState'
-import { applyUrl, parseHash, toHash } from './state/urlState'
+import { applyUrl, isEmptyUrl, parseHash, toHash } from './state/urlState'
+
+// The globe (MapLibre, Terra Draw) and the charts (Observable Plot) are most of the code. Loading them separately lets the
+// headline numbers appear first on slow connections; they are fetched straight after the first screen.
+const loadGlobe = () => import('./components/GlobeMap')
+const loadCharts = () => Promise.all([import('./components/SeasonalChart'), import('./components/AnomalyChart'),
+  import('./components/OverlapChart'), import('./components/ReportedChart')])
+const GlobeMap = lazy(() => loadGlobe().then((x) => ({ default: x.GlobeMap })))
+const SeasonalChart = lazy(() => import('./components/SeasonalChart').then((x) => ({ default: x.SeasonalChart })))
+const AnomalyChart = lazy(() => import('./components/AnomalyChart').then((x) => ({ default: x.AnomalyChart })))
+const OverlapChart = lazy(() => import('./components/OverlapChart').then((x) => ({ default: x.OverlapChart })))
+const ReportedChart = lazy(() => import('./components/ReportedChart').then((x) => ({ default: x.ReportedChart })))
+void loadGlobe()
+
+const chartFallback = <p className="small muted" role="status">Loading the chart…</p>
 
 export default function App() {
-  const { manifest, regions, outlines, reported, error } = useDataset(dataSource)
-  if (error) return <p className="error" role="alert" style={{ padding: '2rem' }}>Could not load the dataset: {error}</p>
-  if (!manifest || !regions) return <p style={{ padding: '2rem' }}>Loading data…</p>
+  const { manifest, regions, outlines, reported, error, retry } = useDataset(dataSource)
+  useEffect(() => { if (manifest) setTimeout(() => void loadCharts().catch(() => {}), 1500) }, [manifest])
+  if (error) {
+    return (
+      <div className="load-screen" role="alert">
+        <p className="load-title">Spark 1</p>
+        <p>Could not load the fire record: {error}.</p>
+        <p className="small muted">Check the connection and try again.</p>
+        <button type="button" className="btn btn-primary" onClick={retry}>Try again</button>
+      </div>
+    )
+  }
+  if (!manifest || !regions) {
+    return (
+      <div className="load-screen" role="status">
+        <p className="load-title">Spark 1</p>
+        <p>Loading the satellite fire record…</p>
+      </div>
+    )
+  }
   return <Explorer manifest={manifest} rf={regions} outlines={outlines} reported={reported} />
 }
 
@@ -98,13 +124,25 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   // Keep the link shareable, and follow links pasted into the same tab.
   useEffect(() => { window.history.replaceState(null, '', toHash(s)) }, [s])
   useEffect(() => {
-    const onHash = () => dispatch({ type: 'applyUrl', manifest: m, outlines, url: parseHash(window.location.hash) })
+    const onHash = () => {
+      const url = parseHash(window.location.hash)
+      if (!isEmptyUrl(url)) dispatch({ type: 'applyUrl', manifest: m, outlines, url })
+    }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [m, outlines])
 
+  // Outlines can arrive after the first screen: redraw the chosen region from its outline instead of its box.
+  const boxedRegion = s.area?.regionKey && s.area.geometry.type === 'Polygon' ? s.area.regionKey : null
+  useEffect(() => {
+    if (!outlines || !boxedRegion) return
+    const area = areaFromRegion(m, outlines, boxedRegion)
+    if (area?.geometry.type === 'MultiPolygon') dispatch({ type: 'setArea', area })
+  }, [m, outlines, boxedRegion])
+
   const data = useAreaData(dataSource, m, rf, outlines, s.area)
   const [drawError, setDrawError] = useState<string | null>(null)
+  const [mapFailed, setMapFailed] = useState(false)
   const [hoverMonth, setHoverMonth] = useState<YearMonth | null>(null)
   const [panel, setPanel] = useState<string | null>(null)
   // What each drawer shows. Kept after closing so the drawer slides out with its content.
@@ -124,7 +162,9 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   const values = useMemo(() => series?.values[s.source] ?? [], [series, s.source])
   const seriesLabel = SERIES_LABELS[s.source]
   const unit = m.unit
-  const ready = !!series && data.status !== 'error' && data.coverage !== 'none' && i0 >= 0 && i1 >= 0
+  // A region keeps its numbers even when its map cells fail to load; only the map needs the cells.
+  const noData = data.status === 'ready' && data.coverage === 'none'
+  const ready = !!series && !noData && i0 >= 0 && i1 >= 0
 
   // The calendar's median row is coloured too, so the medians join the bins and the legend covers them.
   const medians = useMemo(() => (series ? calendarMedians(values, series.months, m.baseline_years) : []), [series, values, m.baseline_years])
@@ -238,13 +278,17 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   const sensorsLine = `Satellites flying in ${labelYm(s.to)}: ${sensorsIn(m, s.to).map((x) => x.label).join(', ') || 'none'}.`
   const sourceLine = harmonizedSource ? `${labelYm(s.to)} is ${sourceOf(m, s.to)}.` : ''
   const touching = s.area ? regionsTouching(m, s.area) : []
-  const needsArea = <p className="muted">Choose an area with data first (Area box on the left).</p>
+  const retryCells = <button type="button" className="btn btn-inline" onClick={data.retry}>Try again</button>
+  const needsArea = !s.area ? <p className="muted">Choose an area first (Area box on the left).</p>
+    : noData ? <p className="muted">No data here: the record covers the four study regions. Choose an area inside one of them (Area box on the left).</p>
+    : data.status === 'error' ? <p className="error" role="alert">The fire cells for this area could not load. {retryCells}</p>
+    : <p className="muted" role="status">Loading the numbers for this area…</p>
 
   const panels: Panel[] = [
     { id: 'area', side: 'left', label: 'Area', icon: <MapPin aria-hidden />, title: 'Choose an area',
       guide: 'Pick one of the four study regions (or click it on the globe), draw a shape inside one, or type coordinates.',
       body: () => <>
-        <AreaPanel manifest={m} area={s.area} tool={s.tool} error={drawError}
+        <AreaPanel manifest={m} area={s.area} tool={s.tool} error={drawError} drawingDisabled={mapFailed}
           onTool={(tool) => dispatch({ type: 'setTool', tool })}
           onRegion={chooseRegion}
           onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
@@ -257,7 +301,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
         activity={activity} palette={s.palette} unit={unit} /> },
     { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
       guide: 'Switch between the harmonized record and raw Aqua MODIS or VIIRS, show every raw detection at its real pixel size, and change colours, imagery and labels.',
-      body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
+      body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels} mapDisabled={mapFailed}
         detections={s.detections} detectionsAvailable={!!detIndex}
         onDetections={(detections) => dispatch({ type: 'setDetections', detections })}
         onSource={(source) => dispatch({ type: 'setSource', source })}
@@ -277,20 +321,23 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
       </> },
     { id: 'trends', side: 'right', wide: true, label: 'Trends', icon: <ChartLine aria-hidden />, title: 'Historical comparison',
       guide: 'This year against a typical year, and every month against the multi-year median.',
-      body: () => !ready ? needsArea : <>
+      body: () => !ready ? needsArea : <Suspense fallback={chartFallback}>
         <SeasonalChart months={series.months} values={values} focusYear={parseYm(s.to).year} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
-          unit={unit} low={harmonizedSource ? series.low : null} high={harmonizedSource ? series.high : null} skip={unfinished} />
-        <AnomalyChart months={series.months} values={values} i0={i0} i1={i1} baselineYears={m.baseline_years} seriesLabel={seriesLabel} unit={unit} skip={unfinished} />
-      </> },
+          unit={unit} low={harmonizedSource ? series.low : null} high={harmonizedSource ? series.high : null} skip={unfinished} areaLabel={s.area?.label} />
+        <AnomalyChart months={series.months} values={values} i0={i0} i1={i1} baselineYears={m.baseline_years} seriesLabel={seriesLabel} unit={unit} skip={unfinished}
+          areaLabel={s.area?.label} />
+      </Suspense> },
     { id: 'sensors', side: 'right', wide: true, label: 'Sensors', icon: <Planet aria-hidden />, title: 'MODIS and VIIRS',
       guide: 'Why harmonize: raw MODIS and VIIRS disagree, and splicing them raw makes a false jump. The conversion factors are here too.',
       body: () => !ready ? needsArea : <>
-        <OverlapChart series={series} unit={unit} />
+        <Suspense fallback={chartFallback}><OverlapChart series={series} unit={unit} areaLabel={s.area?.label} /></Suspense>
         <FactorTable regions={m.regions.filter((r) => touching.includes(r.id))} factors={rf.factors} />
       </> },
     ...(reportedForArea ? [{ id: 'reported', side: 'right' as const, wide: true, label: 'Reported', icon: <FireSimple aria-hidden />, title: 'Detected and reported',
       guide: 'Satellite detections next to fires reported on the ground, where a published statistic exists.',
-      body: () => !ready ? needsArea : <ReportedChart reported={reportedForArea} months={series.months} detected={series.values.harmonized} from={s.from} to={s.to} /> }] : []),
+      body: () => !ready ? needsArea : <Suspense fallback={chartFallback}>
+        <ReportedChart reported={reportedForArea} months={series.months} detected={series.values.harmonized} from={s.from} to={s.to} areaLabel={s.area?.label} />
+      </Suspense> }] : []),
     { id: 'download', side: 'right', label: 'Download', icon: <DownloadSimple aria-hidden />, title: 'Download and share',
       guide: 'Get the monthly numbers as a CSV with their sources and ranges, or copy a link to this exact view.',
       body: () => !ready || !s.area ? needsArea : <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1}
@@ -343,14 +390,35 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
     { target: 'guide', title: 'Guide', text: 'Open this guide again any time.' },
   ]
   const closeGuide = () => { markGuideSeen(); setGuide(false) }
+  const onMapUnavailable = useCallback(() => { setMapFailed(true); dispatch({ type: 'setTool', tool: 'pan' }) }, [])
+
+  // Escape while a drawing tool is on cancels the drawing and goes back to moving the globe; the drawer stays open,
+  // and a second Escape closes it. The guide, when open, takes Escape first.
+  const drawing = s.tool !== 'pan'
+  useEffect(() => {
+    if (!drawing || guide) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      e.preventDefault()
+      dispatch({ type: 'setTool', tool: 'pan' })
+    }
+    window.addEventListener('keydown', onKey, { capture: true })
+    return () => window.removeEventListener('keydown', onKey, { capture: true })
+  }, [drawing, guide])
 
   const selection = `${s.area?.label ?? 'No area'}, ${labelYm(s.from)} – ${labelYm(s.to)}`
   const rangeText = range
     ? series?.bandSummed ? ` (regions' 90% ranges added: ${fmtCount(range[0])}–${fmtCount(range[1])})` : ` (90% range ${fmtCount(range[0])}–${fmtCount(range[1])})`
     : rangeNote === 'estimate' ? ' (estimate for this shape)' : ''
+  const span = seriesSpan(m, s.source)
   const headline: ReactNode = !s.area ? 'Choose an area to begin.'
-    : data.coverage === 'none' ? 'No data here: the record covers the four study regions.'
-    : !focus || focus.value === null ? `${s.area.label}: loading…`
+    : noData ? 'No data here: the record covers the four study regions.'
+    : !series && data.status === 'error' ? <>{s.area.label}: the fire cells could not load. {retryCells}</>
+    : !focus ? `${s.area.label}: loading…`
+    : focus.value === null
+      ? <><strong>{focusLabel}</strong>: no {seriesLabel} data{span && (s.to < span[0] || s.to > span[1])
+        ? ` (this satellite flew from ${labelYm(span[0])} to ${labelYm(span[1])}). Choose months in that span, or the harmonized record, under Layers.`
+        : '.'}</>
     : <><strong>{focusLabel}</strong>{partial ? ' (so far)' : ''}: {fmtCount(focus.value)} {unit}{rangeText}
         {focus.verdict && focus.percentile !== null
           ? <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile{partial ? ' of the same days' : ''})</>
@@ -378,21 +446,26 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
           )
         })}
         <div className="map-full">
-          <GlobeMap area={s.area} cells={cells} regions={regionsFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
-            detections={detSelection?.features} dimCells={detShow}
-            onRegionClick={chooseRegion}
-            onDrawn={(area) => {
-              const err = validateDrawn(area)
-              setDrawError(err)
-              dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
-            }} />
+          <Suspense fallback={<div className="globe" aria-busy="true" />}>
+            <GlobeMap area={s.area} cells={cells} regions={regionsFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
+              detections={detSelection?.features} dimCells={detShow}
+              onRegionClick={chooseRegion} onUnavailable={onMapUnavailable}
+              onDrawn={(area) => {
+                const err = validateDrawn(area)
+                setDrawError(err)
+                dispatch(err ? { type: 'setTool', tool: 'pan' } : { type: 'setArea', area })
+              }} />
+          </Suspense>
         </div>
       </main>
       <BottomStrip expanded={more} onToggle={toggleMore} headline={headline}
         legend={<div className="legends">
           {mapScale
             ? <CompactLegend scale={mapScale} title={`${unit} per ${m.cell_km} km cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
-            : <span className="small muted">{s.area ? `No fire cells in ${labelYm(s.from)} – ${labelYm(s.to)} for this area.` : 'Choose an area to show its fire cells.'}</span>}
+            : <span className="small muted">{!s.area ? 'Choose an area to show its fire cells.'
+              : data.status === 'error' ? <>The fire cells could not load. {retryCells}</>
+              : data.status !== 'ready' ? 'Loading the fire cells…'
+              : `No fire cells in ${labelYm(s.from)} – ${labelYm(s.to)} for this area.`}</span>}
           {detShow && <DetectionsLegend selection={detSelection} state={s.detections} loading={detLoading} error={detError}
             onRetry={() => setDetAttempt((n) => n + 1)} />}
           {verdictKey}

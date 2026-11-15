@@ -1,11 +1,11 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // The keyboard route to choosing an area. Drawing on the globe is never the only way.
 import { useState, type FormEvent } from 'react'
-import { areaFromBbox, areaFromPoint, checkSize, validateBbox, validatePoint, type Area } from '../lib/area'
+import { areaFromBbox, areaFromPoint, checkSize, parseCoordinate as num, validateBbox, validatePoint, type Area } from '../lib/area'
 import type { Bbox } from '../lib/grid'
 
 type Mode = 'bbox' | 'point'
-const num = (s: string) => (s.trim() === '' ? NaN : Number(s))
+
 
 export function CoordinateForm({ onArea }: { onArea: (a: Area) => void }) {
   const [mode, setMode] = useState<Mode>('bbox')
@@ -44,7 +44,7 @@ export function CoordinateForm({ onArea }: { onArea: (a: Area) => void }) {
         <label><input type="radio" name="coord-mode" checked={mode === 'bbox'} onChange={() => setMode('bbox')} /> Box</label>
         <label><input type="radio" name="coord-mode" checked={mode === 'point'} onChange={() => setMode('point')} /> Point + radius</label>
       </fieldset>
-      <p id="coord-hint" className="small muted">Decimal degrees. Latitude −90 to 90, longitude −180 to 180.</p>
+      <p id="coord-hint" className="small muted">Decimal degrees (38.8 or 38,8). Latitude −90 to 90, longitude −180 to 180.</p>
       {mode === 'bbox' ? (
         <div className="row">
           {field('w', 'West', '-8.7')}{field('s', 'South', '49.8')}{field('e', 'East', '1.8')}{field('n', 'North', '60.9')}

@@ -1,9 +1,10 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // NSIDC-style season chart: the focus year against the baseline median, middle 50% and middle 80%.
 import * as Plot from '@observablehq/plot'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { sameMonthBaseline } from '../lib/indices'
 import { MONTH_SHORT, parseYm, type YearMonth } from '../lib/months'
+import { chartFilename, type SvgMeta } from '../lib/download'
 import { PlotFigure } from './PlotFigure'
 
 export interface SeasonalChartProps {
@@ -18,9 +19,11 @@ export interface SeasonalChartProps {
   high?: (number | null)[] | null
   /** The unfinished month, left out of the year's line (it is not comparable with whole months). */
   skip?: YearMonth | null
+  /** The selected area's name, written into the downloaded image and its filename. */
+  areaLabel?: string
 }
 
-export function SeasonalChart({ months, values, focusYear, baselineYears, seriesLabel, unit, low, high, skip = null }: SeasonalChartProps) {
+export function SeasonalChart({ months, values, focusYear, baselineYears, seriesLabel, unit, low, high, skip = null, areaLabel }: SeasonalChartProps) {
   const make = useCallback((width: number) => {
     const bands = Array.from({ length: 12 }, (_, i) => {
       const b = sameMonthBaseline(values, months, i + 1, baselineYears, focusYear)
@@ -55,10 +58,23 @@ export function SeasonalChart({ months, values, focusYear, baselineYears, series
     })
   }, [months, values, focusYear, baselineYears, unit, low, high, skip])
   const [y0, y1] = baselineYears
+  const meta = useMemo<SvgMeta>(() => ({
+    title: `${focusYear} against a typical year`,
+    area: areaLabel,
+    unit: `${unit} per month`,
+    legend: [
+      { label: String(focusYear), color: '#ff9f0a' },
+      ...(low && high ? [{ label: `${focusYear} 90% range (converted months)`, color: '#ff9f0a', kind: 'swatch' as const, opacity: 0.6 }] : []),
+      { label: String(focusYear - 1), color: 'rgba(235,235,245,0.55)' },
+      { label: `Median ${y0} to ${y1}`, color: '#ffffff', dash: '5,4' },
+      { label: 'Middle 50% of years', color: '#409cff', kind: 'swatch' as const, opacity: 0.36 },
+      { label: 'Middle 80% of years', color: '#409cff', kind: 'swatch' as const, opacity: 0.18 },
+    ],
+  }), [focusYear, areaLabel, unit, low, high, y0, y1])
   return (
     <figure className="card" id="seasons">
       <header><h2>{focusYear} against a typical year</h2></header>
-      <PlotFigure make={make} filename={`fire-season-${focusYear}.svg`} label={`Line chart of monthly ${unit} in ${focusYear} against the ${y0} to ${y1} median and ranges.`} />
+      <PlotFigure make={make} filename={chartFilename(`fire-season-${focusYear}`, areaLabel)} meta={meta} label={`Line chart of monthly ${unit} in ${focusYear} against the ${y0} to ${y1} median and ranges.`} />
       <figcaption className="caption">
         Orange: {focusYear}{low && high ? ', with its 90% range where the month is converted from VIIRS' : ''}. Grey: {focusYear - 1}. Dashed white: median of {y0} to {y1} (leaving out {focusYear}).
         Dark band: middle 50% of years. Light band: middle 80% of years. {seriesLabel}.

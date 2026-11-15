@@ -20,6 +20,8 @@ export interface DisplayOptionsProps {
   onBasemap: (b: Basemap) => void
   onLabels: (l: boolean) => void
   onDetections: (d: DetectionsState) => void
+  /** The globe could not start, so its imagery and labels options do nothing. */
+  mapDisabled?: boolean
 }
 
 export function DisplayOptions(p: DisplayOptionsProps) {
@@ -37,7 +39,7 @@ export function DisplayOptions(p: DisplayOptionsProps) {
       <fieldset>
         <legend className="small">Detections at native pixel size</legend>
         <label>
-          <input type="checkbox" checked={d.show} disabled={!p.detectionsAvailable}
+          <input type="checkbox" checked={d.show} disabled={!p.detectionsAvailable || p.mapDisabled}
             onChange={(e) => p.onDetections({ ...d, show: e.target.checked })} /> Show every detection at its real pixel size
         </label>
         {DETECTION_SATELLITES.map((sat) => (
@@ -51,6 +53,7 @@ export function DisplayOptions(p: DisplayOptionsProps) {
           {p.detectionsAvailable
             ? 'Raw detections, not harmonized: VIIRS sees many more, smaller fires, so counts are not comparable. Each dot is a pixel centre, sized like the pixel when zoomed in.'
             : 'Detections are not available in this build.'}
+          {p.detectionsAvailable && p.mapDisabled ? ' The globe could not start here; the hotspots CSV under Download still works.' : ''}
         </p>
       </fieldset>
       <fieldset>
@@ -66,12 +69,13 @@ export function DisplayOptions(p: DisplayOptionsProps) {
       </label>
       <label>
         Globe imagery
-        <select value={p.basemap} onChange={(e) => p.onBasemap(e.target.value as Basemap)}>
+        <select value={p.basemap} disabled={p.mapDisabled} onChange={(e) => p.onBasemap(e.target.value as Basemap)}>
           <option value="day">Blue Marble (day)</option>
           <option value="night">Black Marble (night lights)</option>
         </select>
       </label>
-      <label><input type="checkbox" checked={p.labels} onChange={(e) => p.onLabels(e.target.checked)} /> Borders and place names</label>
+      <label><input type="checkbox" checked={p.labels} disabled={p.mapDisabled} onChange={(e) => p.onLabels(e.target.checked)} /> Borders and place names</label>
+      {p.mapDisabled && <p className="small muted">The globe could not start here, so its imagery and labels cannot be changed.</p>}
     </div>
   )
 }

@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { FIX_MANIFEST, FIX_OUTLINES } from '../test/fixtures'
 import {
-  areaFromBbox, areaFromPoint, areaFromPolygon, areaFromRegion, checkSize, regionIdsFor, validateBbox, validateDrawn, validatePoint,
+  areaFromBbox, areaFromDrawn, areaFromPoint, areaFromPolygon, areaFromRegion, checkSize, MAX_DRAWN_POINTS, parseCoordinate, regionIdsFor,
+  validateBbox, validateDrawn, validatePoint,
 } from './area'
 import type { Outlines } from './data'
 import type { Manifest } from './types'
@@ -41,6 +42,32 @@ describe('typed and drawn areas', () => {
   })
   it('rejects areas over the size limit', () => {
     expect(checkSize(areaFromBbox([-180, -60, 180, 80]))).toMatch(/limit/)
+  })
+  it('rejects areas smaller than one fire cell (they used to get a confident verdict)', () => {
+    expect(checkSize(areaFromBbox([14.2, 37.5, 14.2001, 37.5001]))).toMatch(/under 1 km².*fire cell/)
+    expect(checkSize(areaFromPoint(37.5, 14.2, 2))).toMatch(/13 km², smaller than one 25 km² fire cell/)
+    expect(checkSize(areaFromBbox([14, 37, 14.1, 37.1]))).toBeNull() // about 98 km²
+    // A self-crossing (bow-tie) outline measures 0 km², so it is refused too.
+    expect(validateDrawn(areaFromPolygon({ type: 'Polygon', coordinates: [[[0, 0], [1, 1], [1, 0], [0, 1], [0, 0]]] }))).toMatch(/fire cell/)
+  })
+  it('reads typed numbers with a decimal comma or a typographic minus', () => {
+    expect(parseCoordinate('38,8')).toBe(38.8)
+    expect(parseCoordinate(' -7,5 ')).toBe(-7.5)
+    expect(parseCoordinate('\u22128.7')).toBe(-8.7)
+    expect(parseCoordinate('41.3')).toBe(41.3)
+    expect(parseCoordinate('')).toBeNaN()
+    expect(parseCoordinate('1,234,5')).toBeNaN()
+  })
+  it('rounds drawn outlines to 4 decimals and thins long freehand outlines', () => {
+    const a = areaFromDrawn({ type: 'Polygon', coordinates: [[[0.123456, 0], [1, 0], [1, 1], [0.123456, 0]]] }, 'freehand')
+    expect(a.geometry.coordinates[0][0]).toEqual([0.1235, 0])
+    expect(a.label).toBe('Drawn freehand area')
+    const n = 2000
+    const ring = Array.from({ length: n + 1 }, (_, k) => [Math.cos((2 * Math.PI * (k % n)) / n), Math.sin((2 * Math.PI * (k % n)) / n)])
+    const big = areaFromDrawn({ type: 'Polygon', coordinates: [ring] }, 'freehand')
+    const out = (big.geometry as GeoJSON.Polygon).coordinates[0]
+    expect(out.length).toBe(MAX_DRAWN_POINTS)
+    expect(out[0]).toEqual(out[out.length - 1])
   })
   it('applies the typed-coordinate rules to drawn shapes', () => {
     const ring = (lons: number[]) => areaFromPolygon({ type: 'Polygon', coordinates: [[[lons[0], 60], [lons[1], 60], [lons[1], 65], [lons[0], 65], [lons[0], 60]]] })

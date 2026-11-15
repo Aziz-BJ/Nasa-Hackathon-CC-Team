@@ -16,10 +16,10 @@ const TOOLS: { tool: DrawTool; label: string; icon: ReactNode }[] = [
 
 const HELP: Record<DrawTool, string> = {
   pan: 'Drag to turn the globe, scroll to zoom. Click a region to choose it.',
-  circle: 'Click the centre, then click again (or drag) to set the size.',
-  rectangle: 'Click one corner, then the opposite corner (or drag).',
-  polygon: 'Click each corner. Click the first point again to finish.',
-  freehand: 'Click, move to draw around the area, click again to finish.',
+  circle: 'Click the centre, then click again (or drag) to set the size. Esc cancels.',
+  rectangle: 'Click one corner, then the opposite corner (or drag). Esc cancels.',
+  polygon: 'Click each corner. Click the first point again to finish. Esc cancels.',
+  freehand: 'Click, move to draw around the area, click again to finish. Esc cancels.',
 }
 
 export interface AreaPanelProps {
@@ -31,9 +31,11 @@ export interface AreaPanelProps {
   onArea: (a: Area) => void
   /** Why the last drawn shape was rejected, if it was. */
   error?: string | null
+  /** The globe could not start, so shapes cannot be drawn (typed coordinates still work). */
+  drawingDisabled?: boolean
 }
 
-export function AreaPanel({ manifest: m, area, tool, onTool, onRegion, onArea, error }: AreaPanelProps) {
+export function AreaPanel({ manifest: m, area, tool, onTool, onRegion, onArea, error, drawingDisabled = false }: AreaPanelProps) {
   const choices = [...m.regions.map((r) => ({ key: r.id, name: r.name, km2: r.area_km2 })),
     ...m.groups.map((g) => ({ key: g.id, name: g.name, km2: m.regions.filter((r) => g.regions.includes(r.id)).reduce((a, r) => a + r.area_km2, 0) }))]
   return (
@@ -49,14 +51,17 @@ export function AreaPanel({ manifest: m, area, tool, onTool, onRegion, onArea, e
       <p className="small" style={{ marginTop: '1rem' }}>Or draw a shape inside a region (the globe shows its {m.cell_km} km fire cells):</p>
       <div className="tools" role="toolbar" aria-label="Drawing tools">
         {TOOLS.map((t) => (
-          <button key={t.tool} type="button" className="btn" aria-pressed={tool === t.tool} onClick={() => onTool(t.tool)}>
+          <button key={t.tool} type="button" className="btn" aria-pressed={tool === t.tool} onClick={() => onTool(t.tool)}
+            disabled={drawingDisabled && t.tool !== 'pan'}>
             {t.icon}{t.label}
           </button>
         ))}
       </div>
-      <p className="small muted" aria-live="polite">{HELP[tool]}</p>
+      <p className="small muted" aria-live="polite">
+        {drawingDisabled ? 'Drawing needs the 3D globe, which could not start here. Type coordinates instead.' : HELP[tool]}
+      </p>
       {error && <p className="error small" role="alert">{error}</p>}
-      <details>
+      <details open={drawingDisabled || undefined}>
         <summary>Or type coordinates</summary>
         <CoordinateForm onArea={onArea} />
       </details>

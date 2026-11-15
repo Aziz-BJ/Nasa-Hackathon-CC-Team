@@ -20,22 +20,22 @@ export function buildCsv(m: Manifest, area: Area, series: AreaSeries, i0: number
   const v = m.validation
   const header = [
     `# Harmonized MODIS + VIIRS fire record: monthly export`,
-    `# Area: ${area.label} (${Math.round(area.areaKm2).toLocaleString('en-GB')} km²; bbox W ${w}, S ${s}, E ${e}, N ${n})`,
+    `# Area: ${area.label} (${Math.round(area.areaKm2).toLocaleString('en-GB').replace(/,/g, ' ')} km²; bbox W ${w}; S ${s}; E ${e}; N ${n})`,
     area.regionIds
       ? `# Numbers: the team's harmonized record for ${area.regionIds.length > 1 ? 'these regions, added together' : 'this region'}.`
         + ' low_90/high_90 are the 90% predictive range of the count; in measured Aqua months they equal the value (no model range).'
         + (series.bandSummed ? ' Here they add the regions\' ranges, so they are usually wider than the true range.' : '')
       : `# Numbers: sum of the ${m.cell_km} km fire cells whose centre is inside the area. The harmonized column is an estimate`
         + ' (the region\'s conversion applied to part of it) and has no 90% range. Raw sensor columns are exact.',
-    `# Unit: ${m.unit} = ${m.cell_km} km cells with at least one fire detection in a day or night pass, on the scale of ${m.method.reference_scale}.`,
+    `# Unit: ${m.unit} = ${m.cell_km} km cells with at least one fire detection in a day or night pass on the scale of ${m.method.reference_scale}.`,
     `# Months: ${series.months[i0]} to ${series.months[i1]}. Days are local solar days.`,
     `# Method: ${m.method.name} (${m.method.version}). Calibration windows: ${m.method.fit_window}.`,
-    `# Validation (leave-one-year-out, monthly regional totals): mean absolute log error ${v.loyo_male} (no correction: ${v.loyo_male_naive}), R² ${v.loyo_r2}, ${Math.round(v.coverage90 * 100)}% inside the 90% range.`,
-    `# Source column: measured_aqua (Aqua MODIS, to June 2021), converted_snpp, converted_noaa20, or mixed (days from several satellites; see days per source in the app).`,
+    `# Validation (leave-one-year-out; monthly regional totals): mean absolute log error ${v.loyo_male} (no correction: ${v.loyo_male_naive}); R² ${v.loyo_r2}; ${Math.round(v.coverage90 * 100)}% inside the 90% range.`,
+    `# Source column: measured_aqua (Aqua MODIS until June 2021), converted_snpp, converted_noaa20, or mixed (days from several satellites; see days per source in the app).`,
     `# Comparisons: same calendar month in ${y0}-${y1}, leaving out the month's own year. delta_pct = 100 * (value - median) / median (empty when the median is 0); robust_z = (value - median) / (1.4826 * MAD); percentile = share of baseline years at or below the value.`,
     `# Products: ${m.sensors.map((x) => `${x.label} (${x.source}, from ${x.first_month})`).join('; ')}. Near-real-time (provisional) from ${m.nrt_from}.`,
-    `# Dataset: ${m.dataset_name}${m.mock ? ' (MOCK DATA, NOT REAL)' : ''}; generated ${m.generated_at}; exported ${generatedAt.toISOString()}.`,
-    `# Fire cell-days count satellite detections, not fires or burned area; zero detections is not "no fire" (cloud, smoke, gaps). Source: NASA FIRMS.`,
+    `# Dataset: ${m.dataset_name}${m.mock ? ' (MOCK DATA - NOT REAL)' : ''}; generated ${m.generated_at}; exported ${generatedAt.toISOString()}.`,
+    `# Fire cell-days count satellite detections; not fires or burned area; zero detections is not "no fire" (cloud or smoke or gaps). Source: NASA FIRMS.`,
   ]
   const last = series.months[i1]
   if (m.month_to_date && last === m.last_month && series.mtd) {
@@ -44,6 +44,8 @@ export function buildCsv(m: Manifest, area: Area, series: AreaSeries, i0: number
     header.push(`# ${last} is not finished (data to ${m.last_day}). Days 1-${day} against the same days in ${y0}-${y1}: `
       + `${num(t.value, 2)} vs median ${num(t.baseline?.median, 2)}, percentile ${num(t.percentile, 1)}. Full-month comparisons are left empty for this month.`)
   }
+  // A comma would split a comment over several columns in Excel and naive readers: only semicolons in comments.
+  const comments = header.map((l) => l.replace(/,/g, ';'))
   const rows = [CSV_COLUMNS.join(',')]
   const h = series.values.harmonized
   for (let i = i0; i <= i1; i++) {
@@ -59,10 +61,16 @@ export function buildCsv(m: Manifest, area: Area, series: AreaSeries, i0: number
       num(sum?.baseline?.median, 2), num(sum?.deltaPct, 1), num(sum?.z, 2), num(sum?.percentile, 1),
     ].join(','))
   }
-  return [...header, ...rows].join('\n') + '\n'
+  // The BOM makes Excel read the file as UTF-8 (km², R²).
+  return '\uFEFF' + [...comments, ...rows].join('\n') + '\n'
+}
+
+/** A label as a safe filename part: "Box W 13, S 37.3" becomes "box-w-13-s-37-3". */
+export function areaSlug(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40).replace(/-$/, '') || 'area'
 }
 
 export function csvFilename(area: Area, first: string, last: string): string {
-  const slug = area.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+  const slug = areaSlug(area.label)
   return `fire-cell-days_${slug}_${first}_${last}.csv`
 }

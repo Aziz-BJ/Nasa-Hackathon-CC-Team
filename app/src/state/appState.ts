@@ -6,7 +6,7 @@ import { DETECTIONS_OFF, type DetectionsState } from '../lib/detections'
 import type { PaletteId } from '../lib/colorScale'
 import { addMonths, type YearMonth } from '../lib/months'
 import type { Manifest, SeriesKey } from '../lib/types'
-import { applyUrl, type UrlState } from './urlState'
+import { applyUrl, DISPLAY_DEFAULTS, type UrlState } from './urlState'
 
 export type ScaleTo = 'range' | 'record'
 export type View = 'explore' | 'about'
@@ -50,11 +50,8 @@ export function initialState(m: Manifest): AppState {
     from: m.harmonized_coverage[0],
     to: lastComplete(m),
     source: 'harmonized',
-    scaleTo: 'range',
-    palette: 'inferno',
+    ...DISPLAY_DEFAULTS,
     tool: 'pan',
-    basemap: 'day',
-    labels: true,
     view: 'explore',
     detections: DETECTIONS_OFF,
   }

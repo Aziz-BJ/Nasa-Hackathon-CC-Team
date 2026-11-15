@@ -30,9 +30,10 @@
   --blur: saturate(180%) blur(22px);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --banner-h: 0px;
-  --top-h: 56px;
-  --strip-h: 116px;
-  --rail-w: 76px;
+  --top-h: 56px;              /* top bar bottom edge; TopBar.tsx measures the real value, so a wrapped bar pushes the rails down */
+  --strip-h: 116px;           /* BottomStrip.tsx measures this one too */
+  --rail-w: max(76px, 4.75rem); /* grows with the root font size so box labels never overflow */
+  --ctrl-gutter: 0px;         /* column kept free for the map zoom control and credit where drawers could cover them */
 }
 
 * { box-sizing: border-box; }
@@ -78,7 +79,7 @@ fieldset { border: 0; padding: 0; margin: 0 0 1rem; }
 legend { font-weight: 600; font-size: 0.8125rem; color: var(--label-2); padding: 0; margin-bottom: 0.35rem; text-transform: none; }
 label { display: block; margin-bottom: 0.4rem; }
 label > select, label > input[type='text'] { display: block; width: 100%; margin-top: 0.25rem; }
-details > summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 0.75rem 0 0.5rem; }
+details > summary { cursor: pointer; color: var(--accent); font-weight: 600; margin: 0.5rem 0 0.35rem; padding: 0.3rem 0; min-height: 1.75rem; }
 .tools { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.6rem; }
 .chips .btn { font-size: 0.8125rem; padding: 0.3rem 0.7rem; border-radius: 999px; }
@@ -94,17 +95,21 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 .globe { width: 100%; height: 100%; }
 .map-fallback { position: absolute; inset: 30% 20% auto; padding: 1.5rem; border-radius: var(--r-l); background: var(--glass-strong); }
 /* More specific than MapLibre's own stylesheet (which loads later), so map controls sit above the bottom strip. */
+/* Above the strip (which grows when "More info" opens), and the right rail stops above them, so nothing covers them. */
 .map-full .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 14px); right: 2px; }
 .maplibregl-ctrl-group { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border-radius: var(--r-s) !important; box-shadow: var(--shadow) !important; border: 1px solid var(--edge); }
 .maplibregl-ctrl-group button + button { border-top: 1px solid var(--separator) !important; }
 .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }
-/* Map credit button: same glass as the other controls */
-.maplibregl-ctrl-attrib.maplibregl-compact { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); color: var(--label-2); font-size: 0.6875rem; }
-.maplibregl-ctrl-attrib a { color: var(--label); }
-.maplibregl-ctrl-attrib-button { filter: invert(1); }
+/* Map credit: same glass as the other controls. MapLibre's own stylesheet loads after this one and colours the
+   text black, so these selectors carry .map-full to win on specificity (black on the glass was about 1.1:1). */
+.map-full .maplibregl-ctrl-attrib.maplibregl-compact, .map-full .maplibregl-ctrl-attrib[open] {
+  background: var(--glass-strong) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); color: var(--label); font-size: 0.6875rem; }
+.map-full .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-inner, .map-full .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-inner a { color: var(--label); }
+.map-full .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-inner a { text-decoration: underline; }
+.map-full .maplibregl-ctrl-attrib-button { filter: invert(1); background-color: transparent !important; }
 
 /* ---------- Top bar ---------- */
-.topbar { position: fixed; top: calc(var(--banner-h) + 10px); left: 10px; right: 10px; z-index: 20; display: flex; align-items: center; gap: 0.6rem; pointer-events: none; }
+.topbar { position: fixed; top: calc(var(--banner-h) + 10px); left: 10px; right: 10px; z-index: 20; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.6rem; pointer-events: none; }
 .topbar > * { pointer-events: auto; }
 .search-pill { display: flex; align-items: center; gap: 0.6rem; min-width: 0; max-width: min(560px, calc(100vw - 130px)); padding: 0.35rem 1rem 0.35rem 0.4rem; border-radius: 999px; text-align: left;
   background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
@@ -122,11 +127,13 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 
 /* ---------- Feature boxes: two grouped capsules at the edges ---------- */
 .rails { display: contents; }
-.rail { position: fixed; top: calc(var(--banner-h) + var(--top-h) + 22px); z-index: 15; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: var(--r-l);
+.rail { position: fixed; top: calc(var(--banner-h) + var(--top-h) + 12px); z-index: 15; display: flex; flex-direction: column; gap: 2px; padding: 6px; border-radius: var(--r-l);
+  /* Never taller than the room between the top bar and the map controls; a squeezed rail scrolls instead of overlapping. */
+  max-height: calc(100dvh - var(--banner-h) - var(--top-h) - 12px - var(--strip-h) - 14px - 150px); min-height: 4rem; overflow-y: auto; overscroll-behavior: contain;
   background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
 .rail-left { left: 10px; }
 .rail-right { right: 10px; }
-.box { width: calc(var(--rail-w) - 12px); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0.55rem 0.2rem 0.45rem; border: 0; border-radius: 12px; background: transparent;
+.box { flex: 0 0 auto; width: calc(var(--rail-w) - 12px); display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 0.55rem 0.2rem 0.45rem; border: 0; border-radius: 12px; background: transparent;
   font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.01em; color: var(--label); transition: background 120ms ease; }
 .box svg { width: 1.45rem; height: 1.45rem; }
 .box:hover { background: var(--fill-quiet); }
@@ -134,24 +141,24 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 .box[aria-expanded='true'] svg { color: var(--accent); }
 
 /* ---------- Side drawers: slide out the way they came in; CSS transitions reverse from the current value ---------- */
-.drawer { position: fixed; top: calc(var(--banner-h) + var(--top-h) + 22px); bottom: calc(var(--strip-h) + 16px); z-index: 18; display: flex; flex-direction: column;
-  width: min(400px, calc(100vw - 2 * var(--rail-w) - 48px)); border-radius: var(--r-l);
+.drawer { position: fixed; top: calc(var(--banner-h) + var(--top-h) + 12px); bottom: calc(var(--strip-h) + 16px); z-index: 18; display: flex; flex-direction: column;
+  width: min(400px, calc(100vw - 2 * var(--rail-w) - 48px - var(--ctrl-gutter))); border-radius: var(--r-l);
   background: var(--glass-strong); -webkit-backdrop-filter: saturate(180%) blur(30px); backdrop-filter: saturate(180%) blur(30px);
   border: 1px solid var(--edge); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
   transition: transform 340ms var(--ease), opacity 220ms ease; }
-.drawer-wide { width: min(880px, calc(100vw - 2 * var(--rail-w) - 48px)); }
+.drawer-wide { width: min(960px, calc(100vw - 2 * var(--rail-w) - 48px - var(--ctrl-gutter))); }
 .drawer-left { left: calc(var(--rail-w) + 20px); transform-origin: left center; }
-.drawer-right { right: calc(var(--rail-w) + 20px); transform-origin: right center; }
+.drawer-right { right: calc(var(--rail-w) + 20px + var(--ctrl-gutter)); transform-origin: right center; }
 .drawer[data-open='false'] { opacity: 0; pointer-events: none; }
 .drawer-left[data-open='false'] { transform: translateX(-28px) scale(0.98); }
 .drawer-right[data-open='false'] { transform: translateX(28px) scale(0.98); }
 .drawer:focus { outline: none; }
 .drawer:focus-visible { outline: 3px solid var(--accent); }
-.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 0.9rem 0.6rem 1.1rem; }
+.drawer-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0.9rem 0.9rem 0.6rem 1.1rem; }
 .drawer-head h2 { margin: 0; font-size: 1.375rem; }
 .close-btn { width: 1.9rem; height: 1.9rem; border-radius: 50%; display: grid; place-items: center; border: 0; background: var(--fill); color: var(--label-2); }
 .close-btn:hover { background: var(--fill-hover); color: var(--label); }
-.drawer-body { padding: 0.25rem 1.1rem 1.1rem; overflow-y: auto; }
+.drawer-body { padding: 0.25rem 1.1rem 1.1rem; overflow-y: auto; min-height: 0; flex: 1 1 auto; }
 .drawer-body .card { background: transparent; border: 0; padding: 0; margin: 0 0 1.5rem; }
 .card > header { display: flex; gap: 1rem; align-items: baseline; flex-wrap: wrap; justify-content: space-between; }
 .card > header label { margin: 0; color: var(--label-2); font-size: 0.8125rem; }
@@ -168,22 +175,25 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 .range-dim:first-child { border-radius: 8px 0 0 8px; }
 .range-dim:nth-child(2) { border-radius: 0 8px 8px 0; }
 .range-window { position: absolute; top: -3px; bottom: -3px; border: 2px solid var(--label); border-radius: 6px; pointer-events: none; }
-.range-thumb { position: absolute; top: 50%; width: 1.1rem; height: 2.6rem; transform: translate(-50%, -50%); border-radius: 0.55rem; background: var(--label); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); cursor: grab; touch-action: none; }
+/* The element is the 24 px hit area; the white handle is drawn inside it. */
+.range-thumb { position: absolute; top: 50%; width: max(1.5rem, 24px); height: 2.6rem; transform: translate(-50%, -50%); cursor: grab; touch-action: none; }
+.range-thumb::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1.1rem; transform: translateX(-50%); border-radius: 0.55rem; background: var(--label); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
 .range-thumb::after { content: ''; position: absolute; left: 50%; top: 30%; bottom: 30%; width: 2px; transform: translateX(-50%); border-radius: 1px; background: rgba(0, 0, 0, 0.35); }
 .range-thumb:active { cursor: grabbing; transform: translate(-50%, -50%) scale(1.06); }
-.range-thumb:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.range-thumb:focus-visible { outline: none; }
+.range-thumb:focus-visible::before { outline: 3px solid var(--accent); outline-offset: 2px; }
 .range-ticks { position: relative; height: 1.1rem; margin-top: 0.35rem; font-size: 0.6875rem; color: var(--label-2); font-variant-numeric: tabular-nums; }
 .range-ticks span { position: absolute; transform: translateX(-50%); }
 .range-ticks span:first-child { transform: none; }
 .range-ticks span:last-child { transform: translateX(-100%); }
 
 /* ---------- Bottom strip: legend, one-line verdict, More info ---------- */
-.strip { position: fixed; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 20; width: min(1000px, calc(100vw - 20px)); border-radius: var(--r-l);
+.strip { position: fixed; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 20; width: min(1000px, calc(100vw - 2 * (var(--rail-w) + 20px))); border-radius: var(--r-l);
   background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
 .strip-more-wrap { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 340ms var(--ease); }
 .strip-more-wrap[data-open='true'] { grid-template-rows: 1fr; }
 .strip-more-wrap > .strip-more { min-height: 0; overflow: hidden; }
-.strip-more-wrap[data-open='true'] > .strip-more { overflow-y: auto; max-height: 56vh; padding: 1rem 1rem 0.5rem; border-bottom: 1px solid var(--separator); }
+.strip-more-wrap[data-open='true'] > .strip-more { overflow-y: auto; max-height: clamp(6rem, calc(100dvh - 600px), 56vh); padding: 1rem 1rem 0.5rem; border-bottom: 1px solid var(--separator); }
 .strip-bar { display: flex; gap: 1rem; align-items: center; padding: 0.6rem 0.9rem 0.4rem; flex-wrap: wrap; }
 .strip-legend { flex: 1 1 340px; min-width: 0; }
 .strip-headline { flex: 1 1 240px; font-size: 0.875rem; }
@@ -224,11 +234,14 @@ table.factors th, table.factors td { padding: 0.3rem 0.6rem; text-align: left; b
 .caption { color: var(--label-2); font-size: 0.8125rem; margin-top: 0.5rem; }
 
 /* ---------- Burning calendar ---------- */
-.calendar-wrap { overflow-x: auto; }
-table.calendar { border-collapse: separate; border-spacing: 3px; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
-table.calendar th { font-weight: 600; color: var(--label-2); padding: 0 0.3rem; text-align: right; white-space: nowrap; }
-table.calendar thead th { text-align: center; }
-table.calendar td.c { width: 2.6rem; min-width: 2.6rem; height: 1.45rem; text-align: center; color: #000; border-radius: 5px; position: relative; }
+/* From 768 px the 12 months and the totals fit without scrolling; phones scroll sideways and say so. */
+.calendar-wrap { overflow-x: auto; max-width: 100%; }
+.scroll-hint { display: none; margin: 0.25rem 0 0.4rem; }
+table.calendar { border-collapse: separate; border-spacing: 2px; font-size: 0.6875rem; font-variant-numeric: tabular-nums; }
+table.calendar th { font-weight: 600; color: var(--label-2); padding: 0 0.25rem; text-align: right; white-space: nowrap; }
+table.calendar tfoot th { white-space: normal; min-width: 4.5rem; }
+table.calendar thead th { text-align: center; padding: 0; }
+table.calendar td.c { width: 1.8rem; min-width: 1.6rem; height: 1.45rem; font-size: 0.625rem; text-align: center; color: #000; border-radius: 5px; position: relative; }
 table.calendar td.c.dark-text { color: #000; }
 table.calendar td.c.light-text { color: #fff; }
 table.calendar td.c.zero { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18); }
@@ -240,8 +253,8 @@ table.calendar td.c.partial { box-shadow: inset 0 0 0 2px var(--yellow); }
 table.calendar td.c.incomplete::before, .swatch-incomplete::before { content: ''; position: absolute; top: 0; right: 0; border: 5px solid transparent; border-top-color: #fff; border-right-color: #fff; border-top-right-radius: 4px; pointer-events: none; }
 .swatch-incomplete { position: relative; background: #555; }
 table.calendar td.c:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; z-index: 1; }
-table.calendar td.total { padding-left: 0.5rem; white-space: nowrap; color: var(--label-2); }
-table.calendar td.total .bar { display: inline-block; height: 0.5rem; border-radius: 3px; background: var(--accent); margin-right: 0.35rem; vertical-align: middle; }
+table.calendar td.total { padding-left: 0.4rem; color: var(--label-2); line-height: 1.2; }
+table.calendar td.total .bar { display: block; height: 0.4rem; border-radius: 3px; background: var(--accent); margin-bottom: 2px; max-width: 100%; }
 table.calendar td.total .bar.part { opacity: 0.45; }
 .cell-detail { min-height: 2.6rem; margin-top: 0.6rem; font-size: 0.875rem; }
 
@@ -263,11 +276,12 @@ table.calendar td.total .bar.part { opacity: 0.45; }
 
 /* ---------- Phones: one scrolling row of boxes above a compact strip; drawers become sheets ---------- */
 @media (max-width: 760px) {
-  :root { --strip-h: 150px; --rail-w: 60px; --top-h: 48px; }
+  :root { --strip-h: 150px; --rail-w: max(60px, 3.75rem); --top-h: 48px; --ctrl-gutter: 40px; }
   .mock-banner .long, .legend-compact > .small, .verdict-key { display: none; }
   .search-pill { max-width: none; flex: 1 1 0; }
   .rails { display: flex; gap: 0.5rem; position: fixed; left: 0; right: 0; bottom: calc(var(--strip-h) + 14px); z-index: 15; overflow-x: auto; padding: 4px 10px; }
-  .rail { position: static; flex-direction: row; flex: 0 0 auto; }
+  .rail { position: static; flex-direction: row; flex: 0 0 auto; max-height: none; overflow: visible; }
+  .strip { width: calc(100vw - 20px); }
   .box { width: var(--rail-w); }
   .box svg { width: 1.25rem; height: 1.25rem; }
   .strip-bar { gap: 0.4rem; padding: 0.5rem 0.7rem 0.3rem; }
@@ -276,9 +290,65 @@ table.calendar td.total .bar.part { opacity: 0.45; }
   .legend-compact .swatch { width: 1.9rem; }
   .legend-compact li:nth-child(n+4):not(:last-child) .tick { visibility: hidden; }
   .strip-more-wrap[data-open='true'] > .strip-more { max-height: 46vh; }
-  .drawer, .drawer-wide { left: 10px; right: 10px; width: auto; top: calc(var(--banner-h) + var(--top-h) + 16px); bottom: calc(var(--strip-h) + 92px); }
+  .drawer, .drawer-wide { left: 10px; right: calc(10px + var(--ctrl-gutter)); width: auto; top: calc(var(--banner-h) + var(--top-h) + 16px); bottom: calc(var(--strip-h) + 92px); }
   .drawer-left[data-open='false'], .drawer-right[data-open='false'] { transform: translateY(24px) scale(0.98); }
   .map-full .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 92px); }
+  /* Sideways scrolling stays on phones, so it has to be visible: a hint line and an edge fade. */
+  .scroll-hint { display: block; }
+  .calendar-wrap { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+}
+
+/* ---------- Short screens (phone in landscape, 200% zoom, 400% reflow): rails stay at the sides at any width ---------- */
+@media (max-height: 520px) {
+  :root { --rail-w: max(56px, 3.5rem); --ctrl-gutter: 40px; }
+  .rails { display: contents; }
+  .rail { position: fixed; flex-direction: column; max-height: calc(100dvh - var(--banner-h) - var(--top-h) - 12px - 10px); }
+  .topbar { gap: 0.3rem 0.5rem; }
+  .search-pill { padding: 0.2rem 0.8rem 0.2rem 0.25rem; }
+  .app-glyph { width: 1.75rem; height: 1.75rem; }
+  .round-btn { width: 2.25rem; height: 2.25rem; }
+  .pill-sub { font-size: 0.75rem; }
+  .box { width: calc(var(--rail-w) - 12px); padding: 0.3rem 0.1rem 0.25rem; gap: 1px; font-size: 0.625rem; }
+  .box svg { width: 1.1rem; height: 1.1rem; }
+  /* The strip lives between the rails and leaves the corner column to the zoom control and credit. */
+  .strip { width: auto; transform: none; bottom: 34px; left: calc(var(--rail-w) + 20px); right: calc(var(--rail-w) + 20px + var(--ctrl-gutter)); max-height: calc(100dvh - var(--banner-h) - var(--top-h) - 34px - 10px); display: flex; flex-direction: column; overflow: hidden; }
+  .strip-bar { overflow-y: auto; }
+  .strip-bar { gap: 0.3rem 0.6rem; padding: 0.35rem 0.6rem; }
+  .strip-legend { flex: 1 1 12rem; }
+  .strip-headline { flex: 1 1 10rem; font-size: 0.8125rem; }
+  .legend-compact > .small, .verdict-key { display: none; }
+  .legend-compact .swatch { width: 1.9rem; }
+  .legend-compact ul { flex-wrap: wrap; }
+  .strip-more-wrap { min-height: 0; }
+  .strip-more-wrap[data-open='true'] > .strip-more { max-height: 30vh; padding: 0.6rem 0.8rem 0.3rem; }
+  /* Drawers use the full height here and sit above the strip; closing one brings the strip back. */
+  .drawer, .drawer-wide { top: calc(var(--banner-h) + var(--top-h) + 8px); bottom: 36px; z-index: 22; width: min(var(--drawer-max, 400px), calc(100vw - 2 * (var(--rail-w) + 20px) - var(--ctrl-gutter))); }
+  .drawer-wide { --drawer-max: 960px; }
+  .drawer-left { left: calc(var(--rail-w) + 20px); right: auto; }
+  .drawer-right { left: auto; right: calc(var(--rail-w) + 20px + var(--ctrl-gutter)); }
+  .drawer-head { padding: 0.5rem 0.7rem 0.3rem 1rem; }
+  .drawer-head h2 { font-size: 1.15rem; }
+  /* The credit gets its own line under the strip; the zoom control sits in the free column beside the strip. */
+  .map-full .maplibregl-ctrl-bottom-right { bottom: 36px; right: calc(var(--rail-w) + 14px); }
+  .map-full .maplibregl-ctrl-attrib.maplibregl-compact { position: fixed; right: 10px; bottom: 6px; margin: 0; max-width: calc(100vw - 20px); }
+}
+@media (max-height: 520px) and (max-width: 560px) {
+  .drawer, .drawer-wide { left: 8px; right: 8px; width: auto; }
+}
+
+/* ---------- Windows high contrast ---------- */
+/* Forced colours replace every colour, which would blank out the data. Elements that carry data keep their own
+   colours and get a system-colour border so they stay delimited. */
+@media (forced-colors: active) {
+  table.calendar td.c, table.calendar td.c::before, table.calendar td.c::after,
+  .legend .swatch, .legend .swatch::before, .range-track, .range-dim, .verdict::before, table.calendar td.total .bar { forced-color-adjust: none; }
+  table.calendar td.c, .legend .swatch, .range-track { border: 1px solid CanvasText; }
+  table.calendar td.c.nodata { border-style: dashed; }
+  table.calendar td.c.outside { opacity: 0.5; }
+  .verdict::before { border: 1px solid CanvasText; }
+  .range-window { border-color: Highlight; }
+  .range-thumb::before { background: ButtonFace; border: 2px solid ButtonText; }
+  .box[aria-expanded='true'], .btn[aria-pressed='true'] { outline: 2px solid Highlight; }
 }
 
 /* ---------- Accessibility preferences ---------- */
@@ -308,3 +378,8 @@ label.indent { padding-left: 1.4rem; }
 }
 .verdict-key li:last-child { margin-left: 0.4rem; }
 .verdict-key li:last-child .swatch { border-radius: 3px; }
+/* Status messages added with the stress-test fixes: imagery that cannot load, and inline "Try again" buttons. */
+.map-notice { position: absolute; z-index: 5; top: calc(var(--banner-h) + var(--top-h) + 22px); left: 50%; transform: translateX(-50%);
+  width: max-content; max-width: min(34rem, calc(100vw - 2 * var(--rail-w) - 40px)); margin: 0; padding: 0.55rem 0.9rem;
+  border-radius: var(--r-m); background: var(--glass-strong); color: var(--label); font-size: 0.8125rem; text-align: center; box-shadow: var(--shadow); }
+.btn-inline { padding: 0.15rem 0.6rem; margin-left: 0.25rem; font-size: 0.8125rem; vertical-align: baseline; min-height: 24px; }

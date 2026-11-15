@@ -80,8 +80,13 @@ export function MonthRangeSlider({ first, last, from, to, colors, onChange }: Mo
     : undefined
   const y0 = parseYm(first).year
   const y1 = parseYm(last).year
-  const ticks = [y0, ...Array.from({ length: y1 - y0 + 1 }, (_, k) => y0 + k).filter((y) => y % 5 === 0 && y !== y0 && y1 - y >= 2), y1]
   const tickPos = (y: number) => (y === y0 ? 0 : (Math.max(0, monthsBetween(first, `${y}-01`)) / n) * 100)
+  // Labels are about 30 px wide: keep a gap of 15% of the track from the previous label and from the last one, or they overlap.
+  const ticks = [y0]
+  for (const y of Array.from({ length: y1 - y0 + 1 }, (_, k) => y0 + k)) {
+    if (y % 5 === 0 && y !== y0 && y1 - y >= 2 && tickPos(y) - tickPos(ticks[ticks.length - 1]) >= 15 && tickPos(y1) - tickPos(y) >= 15) ticks.push(y)
+  }
+  if (y1 !== y0) ticks.push(y1)
 
   const thumb = (which: Which, pos: number, ym: YearMonth, label: string, index: number) => (
     <div className={`range-thumb range-thumb-${which}`} data-thumb={which} role="slider" tabIndex={0}

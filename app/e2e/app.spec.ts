@@ -117,7 +117,7 @@ test.describe('app', () => {
     await openPanel(page, 'Download')
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV' }).click()])
     const text = readFileSync((await download.path())!, 'utf8')
-    expect(text).toContain('Fire cell-days count satellite detections, not fires or burned area')
+    expect(text).toContain('Fire cell-days count satellite detections; not fires or burned area')
     expect(text).toContain('fire_cell_days_harmonized,low_90,high_90,source')
     expect(text).not.toContain('MOCK DATA')
     expect(text.split('\n').filter((l) => /^\d{4},/.test(l))).toHaveLength(12)

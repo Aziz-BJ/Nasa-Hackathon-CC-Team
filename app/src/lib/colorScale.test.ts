@@ -20,7 +20,7 @@ describe('buildCountScale', () => {
   it('collapses to one bin when all values are equal', () => {
     const s = buildCountScale([5, 5, 5], { method: 'quantile', bins: 7, palette: 'cividis' })
     expect(s.edges).toEqual([5])
-    expect(s.labels).toEqual(['5 to 5'])
+    expect(s.labels).toEqual(['5'])
   })
   it('falls back to log bins when ties collapse the quantile bins', () => {
     const skewed = [...Array(99).fill(1), 1000]
@@ -71,6 +71,45 @@ describe('converted (fractional) counts', () => {
   it('prints ordinary lower bounds otherwise', () => {
     const s = buildCountScale([1, 5, 40, 200], { method: 'quantile', bins: 3, palette: 'inferno' })
     expect(s.labels[0]).toMatch(/^1 to </)
+  })
+})
+
+describe('quiet periods', () => {
+  const opts = { method: 'quantile', bins: 7, palette: 'inferno' } as const
+  const sane = (labels: string[]) => {
+    for (const l of labels) {
+      expect(l).not.toMatch(/0 to 0$/)
+      const m = /^(?:more than )?([\d.,]+) to <?([\d.,]+)$/.exec(l)
+      if (m && !l.startsWith('more than')) expect(Number(m[1].replace(/,/g, ''))).toBeLessThan(Number(m[2].replace(/,/g, '')))
+    }
+  }
+  it('has no bins when everything is zero or missing', () => {
+    const s = buildCountScale([0, 0, null, 0], opts)
+    expect(s.edges).toEqual([])
+    expect(s.labels).toEqual([])
+    expect(s.colorOf(0)).toBe(ZERO_FILL)
+    expect(s.colorOf(null)).toBe(NO_DATA_FILL)
+    expect(buildCountScale([], opts).labels).toEqual([])
+  })
+  it('prints a single value once, not as an empty range', () => {
+    expect(buildCountScale([0, 7, 7], opts).labels).toEqual(['7'])
+  })
+  it('reads "more than 0 to <0.1" when every positive value is tiny (Sardinia, December 2022)', () => {
+    for (const v of [[0.0248], [0.0248, 0.0248], [0, 0.0248, 0.031, 0.04]]) {
+      const s = buildCountScale(v, opts)
+      expect(s.labels).toEqual(['more than 0 to <0.1'])
+      expect(s.colorOf(0.0248)).toBe(s.colors[0])
+      sane(s.labels)
+    }
+  })
+  it('stays sensible when tiny values mix with large ones', () => {
+    const s = buildCountScale([0, 0.0248, 0.6, 3, 40, 900], opts)
+    expect(s.labels[0]).toMatch(/^more than 0 to <\d/)
+    sane(s.labels)
+    expect(new Set(s.labels).size).toBe(s.labels.length)
+    const t = buildCountScale([0.14, 0.1], opts)
+    sane(t.labels)
+    expect(t.labels).toEqual(['0.1'])
   })
 })
 

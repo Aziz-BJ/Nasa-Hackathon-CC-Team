@@ -4,10 +4,48 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Monthly calendar of NASA FIRMS satellite fire detections, MODIS and VIIRS on one scale." />
+    <meta name="theme-color" content="#000000" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Spark 1" />
+    <meta property="og:description" content="Monthly calendar of NASA FIRMS satellite fire detections for Italy, Sicily, Sardinia and California, MODIS and VIIRS on one scale." />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Spark 1: fire record, MODIS and VIIRS harmonized</title>
+    <style>
+      /* The first screen, shown before the app's code arrives; the app reuses it for its loading and error screens. */
+      html, body { background: #000; color: #fff; }
+      .load-screen { box-sizing: border-box; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        padding: 2rem; text-align: center; font: 15px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+      .load-screen p { margin: 0 0 0.5rem; max-width: 34rem; }
+      .load-screen .load-title { font-size: 1.4rem; font-weight: 700; }
+      .load-screen code { font-size: 0.9em; }
+      .load-screen[role='status']::after { content: ''; width: 28px; height: 28px; margin-top: 0.75rem; border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.25); border-top-color: #ff9f0a; animation: load-spin 0.9s linear infinite; }
+      @keyframes load-spin { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { .load-screen[role='status']::after { animation: none; } }
+    </style>
+    <noscript><style>#root { display: none; }</style></noscript>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="load-screen" role="status">
+        <p class="load-title">Spark 1</p>
+        <p>Loading the satellite fire record…</p>
+      </div>
+    </div>
+    <noscript>
+      <div class="load-screen">
+        <p class="load-title">Spark 1</p>
+        <p>This map of NASA satellite fire detections needs JavaScript. Please switch it on and reload the page.</p>
+      </div>
+    </noscript>
+    <script>
+      // Opened from disk (file://), browsers block the app's code and data files, so say how to open it instead.
+      if (location.protocol === 'file:') {
+        document.getElementById('root').innerHTML = '<div class="load-screen" role="alert"><p class="load-title">Spark 1</p>'
+          + '<p>This copy was opened as a file, and browsers block the app’s code and data that way. Serve the folder with any web server '
+          + '(for example <code>npx serve</code> or <code>python3 -m http.server</code> run inside it) and open the http:// address it prints.</p></div>'
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

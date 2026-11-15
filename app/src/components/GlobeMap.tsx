@@ -2,16 +2,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { Map as MLMap, NavigationControl, setWorkerUrl, type ExpressionSpecification, type GeoJSONSource, type StyleSpecification } from 'maplibre-gl'
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
-import 'maplibre-gl/dist/maplibre-gl.css'
 import { TerraDraw, TerraDrawCircleMode, TerraDrawFreehandMode, TerraDrawPolygonMode, TerraDrawRectangleMode } from 'terra-draw'
 import { TerraDrawMapLibreGLAdapter } from 'terra-draw-maplibre-gl-adapter'
-import { areaFromPolygon, type Area } from '../lib/area'
+import { areaFromDrawn, type Area, type DrawnKind } from '../lib/area'
 import { areaToFeatures } from '../lib/mapFeatures'
 
 // MapLibre 6 finds its worker relative to its own file, which Vite moves. Point at it explicitly.
 setWorkerUrl(workerUrl)
 
-export type DrawTool = 'pan' | 'circle' | 'rectangle' | 'polygon' | 'freehand'
+export type DrawTool = 'pan' | DrawnKind
 export type Basemap = 'day' | 'night'
 
 const GIBS = 'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best'
@@ -72,9 +71,8 @@ const DETECTION_RADIUS = ['interpolate', ['exponential', 2], ['zoom'],
   ...[1, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22].flatMap((z) => [z, ['max', MIN_RADIUS, ['*', ['get', 'k'], 2 ** z]]]),
 ] as unknown as ExpressionSpecification
 
-const TOOL_LABEL: Record<Exclude<DrawTool, 'pan'>, string> = {
-  circle: 'Drawn circle', rectangle: 'Drawn rectangle', polygon: 'Drawn polygon', freehand: 'Drawn freehand area',
-}
+/** Imagery tiles that must fail, with none loaded, before the map says the imagery is unavailable. */
+const IMAGERY_FAILS = 4
 
 export interface GlobeMapProps {
   area: Area | null
@@ -93,11 +91,13 @@ export interface GlobeMapProps {
   onDrawn: (area: Area) => void
   /** Called with a region id when the user clicks a region while moving the globe. */
   onRegionClick: (id: string) => void
+  /** Called once if the globe cannot start (no WebGL2), so drawing and imagery options can be switched off. */
+  onUnavailable?: () => void
 }
 
 const EMPTY: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
 
-export function GlobeMap({ area, cells, regions, tool, basemap, labels, detections = EMPTY, dimCells = false, onDrawn, onRegionClick }: GlobeMapProps) {
+export function GlobeMap({ area, cells, regions, tool, basemap, labels, detections = EMPTY, dimCells = false, onDrawn, onRegionClick, onUnavailable }: GlobeMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
@@ -107,8 +107,12 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, detectio
   onRegionRef.current = onRegionClick
   const toolRef = useRef(tool)
   toolRef.current = tool
+  // The tool when the current click began. The click that finishes a shape also reaches the regions layer, after the
+  // shape has switched the tool back to "pan"; without this it would replace the new shape with the whole region.
+  const downToolRef = useRef<DrawTool>(tool)
   const [ready, setReady] = useState(false)
-  const [failed, setFailed] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+  const [imageryFailed, setImageryFailed] = useState<readonly string[]>([])
 
   // Create the map once. Strict mode mounts twice in dev; the cleanup removes the first map.
   useEffect(() => {
@@ -121,10 +125,16 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, detectio
         attributionControl: { compact: true, customAttribution: 'Data: NASA FIRMS' },
       })
     } catch (e) {
-      setFailed(e instanceof Error ? e.message : String(e))
+      console.warn('The globe could not start:', e)
+      setFailed(true)
       return
     }
     mapRef.current = map
+    map.getCanvasContainer().addEventListener('pointerdown', () => { downToolRef.current = toolRef.current }, { capture: true })
+    // Without imagery the globe is black: say so once, instead of leaving people to guess.
+    const tileFails = new Map<string, number>()
+    const tileOk = new Set<string>()
+    const warned = new Set<string>()
     map.addControl(new NavigationControl({ visualizePitch: false }), 'bottom-right')
     map.on('load', () => {
       map.addSource('regions', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
@@ -134,7 +144,7 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, detectio
       map.addLayer({ id: 'regions-outline', type: 'line', source: 'regions',
         paint: { 'line-color': '#ffffff', 'line-opacity': 0.7, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.8, 7, 1.6] } }, 'borders')
       map.on('click', 'regions', (e) => {
-        if (toolRef.current !== 'pan') return
+        if (toolRef.current !== 'pan' || downToolRef.current !== 'pan') return
         const id = e.features?.[0]?.properties?.id
         if (typeof id === 'string') onRegionRef.current(id)
       })
@@ -167,7 +177,7 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, detectio
         const f = draw.getSnapshotFeature(id)
         const t = toolRef.current
         if (f && f.geometry.type === 'Polygon' && t !== 'pan') {
-          onDrawnRef.current(areaFromPolygon(f.geometry as GeoJSON.Polygon, TOOL_LABEL[t]))
+          onDrawnRef.current(areaFromDrawn(f.geometry as GeoJSON.Polygon, t))
         }
         // Defer the clear: Terra Draw is still inside its own event handler here.
         setTimeout(() => draw.clear(), 0)
@@ -175,7 +185,21 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, detectio
       drawRef.current = draw
       setReady(true)
     })
-    map.on('error', (e) => console.warn('Map error', e.error))
+    map.on('error', (e) => {
+      const source = (e as { sourceId?: string }).sourceId ?? 'map'
+      if (source === 'day' || source === 'night') {
+        tileFails.set(source, (tileFails.get(source) ?? 0) + 1)
+        if (!tileOk.has(source) && tileFails.get(source)! >= IMAGERY_FAILS) setImageryFailed((xs) => (xs.includes(source) ? xs : [...xs, source]))
+      }
+      // One line per source: a blocked tile host would otherwise log every retried tile.
+      if (!warned.has(source)) { warned.add(source); console.warn(`Map error (${source}):`, e.error?.message ?? e.error) }
+    })
+    map.on('sourcedata', (e) => {
+      if ((e.sourceId === 'day' || e.sourceId === 'night') && e.tile && !tileOk.has(e.sourceId)) {
+        tileOk.add(e.sourceId)
+        setImageryFailed((xs) => xs.filter((x) => x !== e.sourceId))
+      }
+    })
     return () => {
       drawRef.current?.stop()
       drawRef.current = null
@@ -184,6 +208,8 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, detectio
       setReady(false)
     }
   }, [])
+
+  useEffect(() => { if (failed) onUnavailable?.() }, [failed, onUnavailable])
 
   useEffect(() => {
     if (!ready || !drawRef.current) return
@@ -233,9 +259,19 @@ export function GlobeMap({ area, cells, regions, tool, basemap, labels, detectio
   if (failed) {
     return (
       <div className="map-fallback" role="note">
-        The 3D globe could not start ({failed}). It needs WebGL2. The region list and typed coordinates still work, and every chart is unaffected.
+        The 3D globe could not start: this browser or device does not offer WebGL2, or has it switched off. Choose a region or type
+        coordinates in the Area box; every number, chart and download still works.
       </div>
     )
   }
-  return <div ref={container} className="globe" role="region" aria-label="Globe map. Click a study region, use the drawing tools, or type coordinates in the Area panel." />
+  return (
+    <>
+      <div ref={container} className="globe" role="region" aria-label="Globe map. Click a study region, use the drawing tools, or type coordinates in the Area panel." />
+      {imageryFailed.includes(basemap) && (
+        <p className="map-notice" role="status">
+          The satellite imagery (NASA GIBS) could not load, so the globe is dark. Fire cells, numbers, charts and downloads still work.
+        </p>
+      )}
+    </>
+  )
 }

@@ -2,10 +2,12 @@
 // Renders an Observable Plot chart inside React at the width of its container (drawers vary in width).
 import { DownloadSimple } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
-import { saveFile, svgFile } from '../lib/download'
+import { saveFile, svgFile, type SvgMeta } from '../lib/download'
 
-export function PlotFigure({ make, label, filename }: {
+export function PlotFigure({ make, label, filename, meta }: {
   make: (width: number) => SVGSVGElement | HTMLElement; label: string; filename?: string
+  /** Title, area, unit, legend and source written into the downloaded SVG. */
+  meta?: SvgMeta
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState(0)
@@ -28,7 +30,7 @@ export function PlotFigure({ make, label, filename }: {
   }, [make, label, width])
   function download() {
     const svg = ref.current?.querySelector('svg')
-    if (svg && filename) saveFile(filename, svgFile(svg), 'image/svg+xml')
+    if (svg && filename) saveFile(filename, svgFile(svg, meta), 'image/svg+xml')
   }
   return (
     <>

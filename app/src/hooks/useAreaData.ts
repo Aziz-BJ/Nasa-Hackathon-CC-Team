@@ -1,23 +1,27 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { coverageOf, regionsTouching, selectCells, seriesFromCells, seriesFromRegions, type AreaSeries, type Selection } from '../lib/aggregate'
 import type { Area } from '../lib/area'
 import type { DataSource, Outlines } from '../lib/data'
 import type { Manifest, RegionsFile } from '../lib/types'
 
 export interface AreaData {
+  /** 'idle' until the area's files have been asked for; 'error' when a cell file failed (see error). */
   status: 'idle' | 'loading' | 'ready' | 'error'
   /** The 5 km fire cells inside the area (for the map, and the numbers of drawn shapes). */
   selection: Selection | null
   series: AreaSeries | null
+  /** Only final once status is 'ready': a shape at sea can still turn out to hold sea-margin cells. */
   coverage: 'none' | 'partial' | 'full'
   error: string | null
 }
 
 const IDLE: AreaData = { status: 'idle', selection: null, series: null, coverage: 'none', error: null }
 
-export function useAreaData(ds: DataSource, m: Manifest, rf: RegionsFile, outlines: Outlines | null, area: Area | null): AreaData {
+export function useAreaData(ds: DataSource, m: Manifest, rf: RegionsFile, outlines: Outlines | null, area: Area | null): AreaData & { retry: () => void } {
   const [state, setState] = useState<AreaData>(IDLE)
+  const [attempt, setAttempt] = useState(0)
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
   useEffect(() => {
     if (!area) { setState(IDLE); return }
     let alive = true
@@ -39,6 +43,6 @@ export function useAreaData(ds: DataSource, m: Manifest, rf: RegionsFile, outlin
         if (alive) setState({ ...IDLE, series: regionSeries, status: 'error', coverage, error: e instanceof Error ? e.message : String(e) })
       })
     return () => { alive = false }
-  }, [ds, m, rf, outlines, area])
-  return state
+  }, [ds, m, rf, outlines, area, attempt])
+  return { ...state, retry }
 }

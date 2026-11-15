@@ -16,5 +16,8 @@ export const VERDICT_THRESHOLDS: [number, number, number, number] = [10, 25, 75,
 /** Largest shape a user can draw, in km². */
 export const MAX_AREA_KM2 = 10_000_000
 
+/** Smallest shape, in km²: one 5 km fire cell. Numbers count whole cells, so a smaller shape can only show 0 or a whole cell. */
+export const MIN_AREA_KM2 = 25
+
 /** Fewest baseline years needed before we print a comparison. */
 export const MIN_BASELINE_YEARS = 3

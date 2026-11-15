@@ -4,9 +4,11 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [react()],
-  // Relative base so the built site works from any folder (GitHub Pages, Netlify, a USB stick).
+  // Relative base so the built site works from any folder or sub-path (Vercel, GitHub Pages, Netlify). It needs a web
+  // server: opened as file://, browsers block module scripts and data files (index.html then says so).
   base: './',
-  build: { chunkSizeWarningLimit: 2000 },
+  // The globe chunk (MapLibre + Terra Draw) is about 1.1 MB unminified; it loads after the first screen.
+  build: { chunkSizeWarningLimit: 1400 },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
