@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const dataset = process.env.VITE_DATASET ?? '_mock'
+const dataset = process.env.VITE_DATASET ?? 'real'
 const allowMock = process.env.ALLOW_MOCK === '1'
 const root = fileURLToPath(new URL('../', import.meta.url)) // not .pathname: the repo path contains a space
 
@@ -26,7 +26,7 @@ try {
   process.exit(1)
 }
 if (manifest.mock === true && !allowMock) {
-  console.error(`Build stopped: dataset "${dataset}" is MOCK DATA. Set VITE_DATASET to the real dataset, or run "npm run build:demo" for a labelled demo.`)
+  console.error(`Build stopped: dataset "${dataset}" is MOCK DATA. Set VITE_DATASET to the real dataset, or set ALLOW_MOCK=1 for a labelled demo.`)
   process.exit(1)
 }
 console.log(`Data check passed: "${dataset}" (${manifest.mock ? 'mock, demo build with banner' : 'real data'}).`)

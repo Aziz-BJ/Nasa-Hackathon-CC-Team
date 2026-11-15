@@ -17,6 +17,8 @@ export interface BurningCalendarProps {
   statusOf: (ym: YearMonth) => MonthStatus
   baselineYears: [number, number]
   seriesLabel: string
+  /** What the numbers count, e.g. "fire cell-days". */
+  unit: string
   legendId: string
   onFocusMonth?: (ym: YearMonth) => void
 }
@@ -61,7 +63,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
     const v = valueOf(ym)
     const status = p.statusOf(ym)
     if (v === null) return `${labelYm(ym)}: no data (${STATUS_LABELS[status]}).`
-    return `${labelYm(ym)}: ${fmtCount(v)} hotspots detected, ${p.seriesLabel}. ${STATUS_LABELS[status]}.${inRange(ym) ? '' : ' Outside the chosen months.'}`
+    return `${labelYm(ym)}: ${fmtCount(v)} ${p.unit}, ${p.seriesLabel}. ${STATUS_LABELS[status]}.${inRange(ym) ? '' : ' Outside the chosen months.'}`
   }
 
   function move(ev: KeyboardEvent<HTMLTableElement>) {
@@ -90,7 +92,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
       <div className="calendar-wrap">
         <table className="calendar" ref={tableRef} onKeyDown={move} aria-describedby={p.legendId}>
           <caption className="sr-only">
-            Burning calendar: hotspots detected per month, {p.from} to {p.to}, {p.seriesLabel}. Use arrow keys to move between months.
+            Burning calendar: {p.unit} per month, {p.from} to {p.to}, {p.seriesLabel}. Use arrow keys to move between months.
           </caption>
           <thead>
             <tr>
@@ -111,7 +113,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
                   const cls = ['c',
                     v === null ? 'nodata' : v === 0 ? 'zero' : '',
                     inRange(ym) ? '' : 'outside',
-                    status === 'nrt' ? 'nrt' : '', status === 'partial' ? 'partial' : '',
+                    status === 'nrt' ? 'nrt' : '', status === 'partial' ? 'partial' : '', status === 'incomplete' ? 'incomplete' : '',
                     v !== null ? textClass(toHex(fill)) : '',
                   ].filter(Boolean).join(' ')
                   return (

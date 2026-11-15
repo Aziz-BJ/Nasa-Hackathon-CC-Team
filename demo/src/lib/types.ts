@@ -1,19 +1,18 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// The data contract between the pipeline (Andre, Pierre) and the app. Proposed extension of HANDOVER.md section 7:
-// same fields, packed into 10-degree tiles so any drawn area on the globe loads only the files it needs.
+// The data contract between the pipeline and the app, version 2 (docs/DATA_CONTRACT.md).
+// Written by scripts/import-data.ts from Pierre's harmonized record and Andrea's 5 km cell table.
 import type { Bbox } from './grid'
 import type { YearMonth } from './months'
 
 export const SERIES_KEYS = ['harmonized', 'modis', 'viirs_snpp', 'viirs_noaa20'] as const
 export type SeriesKey = (typeof SERIES_KEYS)[number]
 export type SensorKey = Exclude<SeriesKey, 'harmonized'>
-export type BandKey = 'harmonized_low' | 'harmonized_high'
 
 export const SERIES_LABELS: Record<SeriesKey, string> = {
-  harmonized: 'Harmonized (MODIS + VIIRS)',
-  modis: 'MODIS only (raw)',
-  viirs_snpp: 'VIIRS S-NPP only (raw)',
-  viirs_noaa20: 'VIIRS NOAA-20 only (raw)',
+  harmonized: 'Harmonized (Aqua MODIS scale)',
+  modis: 'Aqua MODIS only (raw)',
+  viirs_snpp: 'S-NPP VIIRS only (raw)',
+  viirs_noaa20: 'NOAA-20 VIIRS only (raw)',
 }
 
 export interface SensorInfo {
@@ -25,59 +24,110 @@ export interface SensorInfo {
   last_month: YearMonth
 }
 
-export interface Preset {
+export interface RegionInfo {
   id: string
   name: string
   bbox: Bbox
+  area_km2: number
+  /** Number of 5 km cells with at least one fire cell-day. */
+  cells: number
+}
+
+/** Several regions shown together, e.g. All of Italy. */
+export interface RegionGroup {
+  id: string
+  name: string
+  regions: string[]
+}
+
+export interface SeamCheck {
+  seam: string
+  step_pct: number
+  lo90_pct: number
+  hi90_pct: number
+  no_step: boolean
 }
 
 export interface Manifest {
-  schema_version: 1
+  schema_version: 2
   mock: boolean
   dataset_name: string
-  grid_deg: number
-  tile_deg: number
   first_month: YearMonth
   last_month: YearMonth
   /** true when last_month is not finished yet ("month to date"). */
   month_to_date: boolean
+  /** Last day with data, YYYY-MM-DD. */
+  last_day: string
   /** First month that is near-real-time (provisional) rather than standard science-quality data. */
   nrt_from: YearMonth
   baseline_years: [number, number]
   harmonized_coverage: [YearMonth, YearMonth]
+  unit: string
+  cell_km: number
   sensors: SensorInfo[]
-  /** Areas the pipeline processed. Outside these, "no data" is not the same as "no hotspots". */
-  coverage: Bbox[]
-  filters: { type: number[]; modis_confidence_min: number; viirs_confidence: string[] }
-  method: {
-    name: string
-    version: string
-    reference_scale: string
-    fit_years: [number, number] | null
-    test_years: [number, number] | null
+  /** Days of each month (aligned to first_month..last_month) by the satellite the record uses. Same for every region. */
+  days: { aqua: number[]; snpp: number[]; noaa20: number[]; none: number[] }
+  regions: RegionInfo[]
+  groups: RegionGroup[]
+  method: { name: string; version: string; reference_scale: string; fit_window: string }
+  validation: {
+    loyo_male_naive: number
+    loyo_male: number
+    loyo_r2: number
+    coverage90: number
+    seams: SeamCheck[]
+    chain_ratio: number
   }
-  validation: { metric: string; value: number | null; notes: string }
   generated_at: string
-  tiles: string[]
-  presets: Preset[]
+}
+
+/** Monthly values for one region, aligned to manifest months. Raw sensors are null before launch. */
+export interface RegionSeries {
+  harmonized: number[]
+  /** 90% predictive range of the count. Equal to the value in measured (Aqua) months. */
+  low: number[]
+  high: number[]
+  modis: (number | null)[]
+  viirs_snpp: (number | null)[]
+  viirs_noaa20: (number | null)[]
+}
+
+export interface MonthToDate {
+  /** The unfinished month and its last day with data. */
+  month: YearMonth
+  day: number
+  years: number[]
+  series: Record<string, { values: number[]; low: number[]; high: number[] }>
+}
+
+export interface FactorRow {
+  model: 'snpp_to_aqua' | 'noaa20_to_snpp' | 'noaa20_to_aqua'
+  season: 'fire' | 'off'
+  daynight: 'D' | 'N'
+  factor: number
+  low: number
+  high: number
+}
+
+export interface RegionsFile {
+  series: Record<string, RegionSeries>
+  mtd: MonthToDate | null
+  factors: Record<string, FactorRow[]>
 }
 
 /**
- * One tile. Cells with no detections in any month are left out (sparse), which means 0, not "no data".
- * Each series holds one array per cell, one value per month from manifest.first_month to last_month.
- * null = that sensor was not operating that month.
+ * The 5 km fire cells of one region. Cells and months not listed are 0.
+ * entries: [cell index, month index, harmonized, aqua, snpp, noaa20] repeated, sorted by cell then month.
+ * mtd: [cell index, year index (into MonthToDate.years), harmonized] repeated, for the unfinished month's days.
  */
-export interface TileFile {
-  tile_id: string
-  cells: string[]
-  series: Record<SeriesKey, (number | null)[][]> & Partial<Record<BandKey, (number | null)[][]>>
+export interface CellFile {
+  region: string
+  cells: [id: string, lat: number, lon: number][]
+  entries: number[]
+  mtd: number[]
 }
 
-export interface OverviewFile {
-  grid_deg: number
-  metric: string
-  cells: [lat: number, lon: number, value: number][]
-}
+export const ENTRY_STRIDE = 6
 
 export interface ReportedSeries {
   preset_id: string

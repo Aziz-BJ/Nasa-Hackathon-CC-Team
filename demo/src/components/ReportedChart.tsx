@@ -27,7 +27,7 @@ export function ReportedChart({ reported, months, detected, from, to }: Reported
     })
     months.forEach((ym, i) => {
       const v = detected[i]
-      if (ym >= from && ym <= to && v !== null) rows.push({ date: toDate(ym), v, panel: 'Detected: satellite hotspots' })
+      if (ym >= from && ym <= to && v !== null) rows.push({ date: toDate(ym), v, panel: 'Detected: satellite fire cell-days' })
     })
     return Plot.plot({
       width, height: 380, marginLeft: 64,
@@ -45,7 +45,7 @@ export function ReportedChart({ reported, months, detected, from, to }: Reported
   return (
     <figure className="card" id="reported">
       <header><h2>Fires detected and fires reported</h2></header>
-      <PlotFigure make={make} filename={"hotspots-detected-vs-reported.svg"} label="Two line charts: satellite hotspot detections and fires reported on the ground, by month." />
+      <PlotFigure make={make} filename={"detected-vs-reported.svg"} label="Two line charts: satellite fire cell-days and fires reported on the ground, by month." />
       <figcaption className="caption">
         Top and bottom use different units and scales. Ground reports count incidents attended; satellites count hot pixels.
         They are not expected to match, but busy seasons should line up. Source: {reported.source} ({reported.licence}). <a href={reported.url}>Data page</a>.

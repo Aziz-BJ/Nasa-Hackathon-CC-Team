@@ -63,12 +63,23 @@ export function relativeAnomaly(value: number, reference: number, floor = MIN_DE
   return ((value - reference) / Math.max(reference, floor)) * 100
 }
 
-/** Share of the sample below the value (ties count half), 0-100. */
+/** Share of the baseline years at or below the value, 0-100 (METHOD.md section 8: P = 100 * #{H_y' <= H_y} / |B|). */
 export function percentileOf(value: number, sample: number[]): number {
   if (sample.length === 0) return NaN
-  const below = sample.filter((v) => v < value).length
-  const equal = sample.filter((v) => v === value).length
-  return ((below + equal / 2) / sample.length) * 100
+  return (sample.filter((v) => v <= value).length / sample.length) * 100
+}
+
+/** Pierre's delta %: 100 * (value - median) / median. null when the median is 0 (shown as "n/a"). */
+export function deltaPct(value: number, median: number): number | null {
+  return median > 0 ? ((value - median) / median) * 100 : null
+}
+
+/** Robust z: (value - median) / (1.4826 * MAD). null when the MAD is 0. */
+export function robustZ(value: number, sample: number[]): number | null {
+  if (sample.length === 0) return null
+  const med = quantile([...sample].sort((a, b) => a - b), 0.5)
+  const mad = quantile(sample.map((v) => Math.abs(v - med)).sort((a, b) => a - b), 0.5)
+  return mad > 0 ? (value - med) / (1.4826 * mad) : null
 }
 
 /** 1 = highest. Ties share the better rank. "of" counts the value itself plus the sample. */
@@ -102,32 +113,48 @@ export interface MonthSummary {
   month: YearMonth
   value: number | null
   baseline: BaselineStats | null
-  vsMeanPct: number | null
-  vsMedianPct: number | null
+  /** Pierre's delta % against the baseline median (null when the median is 0). */
+  deltaPct: number | null
   percentile: number | null
   rank: { rank: number; of: number } | null
   verdict: VerdictLevel | null
+  /** Robust z against the baseline median and MAD. */
   z: number | null
+}
+
+/** The comparison every view uses (METHOD.md section 8), for one value against its baseline years. */
+export function compareWith(month: YearMonth, value: number | null, baseline: BaselineStats | null): MonthSummary {
+  if (value === null || baseline === null) {
+    return { month, value, baseline, deltaPct: null, percentile: null, rank: null, verdict: null, z: null }
+  }
+  const percentile = percentileOf(value, baseline.values)
+  return {
+    month, value, baseline,
+    deltaPct: deltaPct(value, baseline.median),
+    percentile,
+    rank: rankOf(value, baseline.values),
+    verdict: verdictFor(percentile),
+    z: robustZ(value, baseline.values),
+  }
 }
 
 export function summarizeMonth(series: Series, months: YearMonth[], focus: YearMonth, baselineYears: [number, number]): MonthSummary {
   const i = months.indexOf(focus)
   const value = i >= 0 ? series[i] : null
   const { year, month } = parseYm(focus)
-  const baseline = sameMonthBaseline(series, months, month, baselineYears, year)
-  if (value === null || baseline === null) {
-    return { month: focus, value, baseline, vsMeanPct: null, vsMedianPct: null, percentile: null, rank: null, verdict: null, z: null }
-  }
-  const percentile = percentileOf(value, baseline.values)
-  return {
-    month: focus, value, baseline,
-    vsMeanPct: relativeAnomaly(value, baseline.mean),
-    vsMedianPct: relativeAnomaly(value, baseline.median),
-    percentile,
-    rank: rankOf(value, baseline.values),
-    verdict: verdictFor(percentile),
-    z: zScore(value, baseline.mean, baseline.sd),
-  }
+  return compareWith(focus, value, sameMonthBaseline(series, months, month, baselineYears, year))
+}
+
+/** The unfinished month (days 1..N) against the same days of the baseline years. */
+export function summarizeMtd(
+  mtd: { years: number[]; values: number[] }, focus: YearMonth, [y0, y1]: [number, number],
+): MonthSummary {
+  const { year } = parseYm(focus)
+  const at = mtd.years.indexOf(year)
+  const years: number[] = []
+  const values: number[] = []
+  mtd.years.forEach((y, k) => { if (y >= y0 && y <= y1 && y !== year) { years.push(y); values.push(mtd.values[k]) } })
+  return compareWith(focus, at >= 0 ? mtd.values[at] : null, statsOf(years, values))
 }
 
 export interface YearToDate {
@@ -191,7 +218,7 @@ export interface MonthlyAnomaly {
 /** Anomaly of every month in [i0, i1] against its calendar month's multi-year average (or median), excluding its own year. */
 export function monthlyAnomalies(
   series: Series, months: YearMonth[], i0: number, i1: number,
-  baselineYears: [number, number], reference: 'mean' | 'median' = 'mean',
+  baselineYears: [number, number], reference: 'mean' | 'median' = 'median',
 ): MonthlyAnomaly[] {
   const out: MonthlyAnomaly[] = []
   for (let i = i0; i <= i1; i++) {

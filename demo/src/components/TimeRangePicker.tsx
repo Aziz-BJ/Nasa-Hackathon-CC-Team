@@ -12,8 +12,10 @@ export interface TimeRangePickerProps {
   from: YearMonth
   to: YearMonth
   onChange: (from: YearMonth, to: YearMonth) => void
-  /** Hotspots per month for the chosen area, from \`first\` to \`last\`, drawn as the bar's colours. */
+  /** Activity per month for the chosen area, from first to last, drawn as the bar's colours. */
   activity?: (number | null)[]
+  /** What the activity counts, e.g. "fire cell-days". */
+  unit?: string
   palette?: PaletteId
 }
 
@@ -42,7 +44,7 @@ function MonthSelect({ label, value, first, last, onChange }: {
   )
 }
 
-export function TimeRangePicker({ first, last, from, to, onChange, activity, palette = 'inferno' }: TimeRangePickerProps) {
+export function TimeRangePicker({ first, last, from, to, onChange, activity, palette = 'inferno', unit = 'fire cell-days' }: TimeRangePickerProps) {
   const [manual, setManual] = useState(false)
   const colors = useMemo(() => {
     if (!activity) return undefined
@@ -69,7 +71,7 @@ export function TimeRangePicker({ first, last, from, to, onChange, activity, pal
           <MonthSelect label="To" value={to} first={first} last={last} onChange={(ym) => onChange(from, ym)} />
         </div>
       )}
-      <p className="small muted">Drag the handles or use the arrow keys. The bar shows this area's hotspots per month (UTC).</p>
+      <p className="small muted">Drag the handles or use the arrow keys. The bar shows this area's {unit} per month.</p>
     </div>
   )
 }

@@ -2,7 +2,7 @@
 // Historical comparison: each month's anomaly against the multi-year average for that calendar month.
 import * as Plot from '@observablehq/plot'
 import { useCallback, useState } from 'react'
-import { ANOMALY_COLORS, ANOMALY_LABELS, anomalyColor } from '../lib/colorScale'
+import { ANOMALY_COLORS, ANOMALY_LABELS, anomalyColor, fmtCount } from '../lib/colorScale'
 import { monthlyAnomalies } from '../lib/indices'
 import { addMonths, labelYm, type YearMonth } from '../lib/months'
 import { PlotFigure } from './PlotFigure'
@@ -14,13 +14,14 @@ export interface AnomalyChartProps {
   i1: number
   baselineYears: [number, number]
   seriesLabel: string
+  unit: string
 }
 
 const CLIP = 200
 const toDate = (ym: YearMonth) => new Date(`${ym}-01T00:00:00Z`)
 
-export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabel }: AnomalyChartProps) {
-  const [reference, setReference] = useState<'mean' | 'median'>('mean')
+export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabel, unit }: AnomalyChartProps) {
+  const [reference, setReference] = useState<'mean' | 'median'>('median')
   const make = useCallback((width: number) => {
     const data = monthlyAnomalies(values, months, i0, i1, baselineYears, reference).map((a) => ({
       ...a,
@@ -37,12 +38,12 @@ export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabe
       marks: [
         Plot.rectY(data, {
           x1: 'start', x2: 'end', y: 'y', fill: 'color', inset: 0.5, tip: true,
-          title: (d: (typeof data)[number]) => `${labelYm(d.month)}: ${Math.round(d.value)} hotspots, ${Math.round(d.anomalyPct)}% vs ${Math.round(d.reference)}`,
+          title: (d: (typeof data)[number]) => `${labelYm(d.month)}: ${fmtCount(d.value)} ${unit}, ${Math.round(d.anomalyPct)}% vs ${fmtCount(d.reference)}`,
         }),
         Plot.ruleY([0], { stroke: '#ffffff' }),
       ],
     })
-  }, [months, values, i0, i1, baselineYears, reference])
+  }, [months, values, i0, i1, baselineYears, reference, unit])
   const [y0, y1] = baselineYears
   return (
     <figure className="card" id="anomalies">
@@ -50,18 +51,18 @@ export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabe
         <h2>Anomalies against the multi-year {reference === 'mean' ? 'average' : 'median'}</h2>
         <label className="small">Compare with{' '}
           <select value={reference} onChange={(e) => setReference(e.target.value as 'mean' | 'median')}>
-            <option value="mean">average (mean)</option>
             <option value="median">median (robust to extreme years)</option>
+            <option value="mean">average (mean)</option>
           </select>
         </label>
       </header>
-      <PlotFigure make={make} filename={"hotspots-anomalies.svg"} label={`Bar chart of monthly anomalies from ${months[i0]} to ${months[i1]}.`} />
+      <PlotFigure make={make} filename={"fire-anomalies.svg"} label={`Bar chart of monthly anomalies from ${months[i0]} to ${months[i1]}.`} />
       <div className="legend" aria-label="Anomaly colours">
         {ANOMALY_COLORS.map((c, i) => <span key={c}><span className="swatch" style={{ background: c }} />{ANOMALY_LABELS[i]}</span>)}
       </div>
       <figcaption className="caption">
-        Each bar is one month compared with the same calendar month in {y0} to {y1}, leaving out its own year. Blue: fewer hotspots than usual. Red: more.
-        Bars are cut at +{CLIP}%; hover for the exact value. Months with fewer than 5 typical hotspots use 5 as the divisor. {seriesLabel}.
+        Each bar is one month compared with the same calendar month in {y0} to {y1}, leaving out its own year. Blue: less fire activity than usual. Red: more.
+        Bars are cut at +{CLIP}%; hover for the exact value. Months with a typical value below 5 {unit} use 5 as the divisor, so quiet winter months don't swing wildly. {seriesLabel}.
       </figcaption>
     </figure>
   )

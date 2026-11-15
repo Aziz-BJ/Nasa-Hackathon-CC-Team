@@ -1,40 +1,41 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import { buildCountScale, fmtCount, type CountScale, type PaletteId } from './colorScale'
-import { cellId, cellRing } from './grid'
-import type { OverviewFile } from './types'
+import { fmtCount, type CountScale } from './colorScale'
+import type { Outlines } from './data'
+import { cellSquare } from './grid'
 
-type FC = GeoJSON.FeatureCollection<GeoJSON.Polygon, { color: string; label: string }>
+type FC = GeoJSON.FeatureCollection<GeoJSON.Polygon | GeoJSON.MultiPolygon, Record<string, unknown>>
 
 export const EMPTY_FC: FC = { type: 'FeatureCollection', features: [] }
 
+/** The 5 km fire cells, coloured by their total over the chosen months. Cells with 0 are left out. */
 export function cellsToFeatures(
-  totals: { id: string; total: number | null }[], gridDeg: number, scale: CountScale,
+  totals: { id: string; lat: number; lon: number; total: number }[], cellKm: number, scale: CountScale, unit: string,
 ): FC {
   return {
     type: 'FeatureCollection',
     features: totals
-      .filter((c) => c.total !== null && c.total > 0)
+      .filter((c) => c.total > 0)
       .map((c) => ({
         type: 'Feature',
-        properties: { color: scale.colorOf(c.total), label: `${fmtCount(c.total as number)} hotspots` },
-        geometry: { type: 'Polygon', coordinates: [cellRing(c.id, gridDeg)] },
+        properties: { color: scale.colorOf(c.total), label: `${fmtCount(c.total)} ${unit}` },
+        geometry: { type: 'Polygon', coordinates: [cellSquare(c.lat, c.lon, cellKm)] },
       })),
   }
 }
 
-/** Global context layer: where hotspots usually are. Log bins because counts span orders of magnitude. */
-export function overviewToFeatures(ov: OverviewFile, palette: PaletteId): FC {
-  const scale = buildCountScale(ov.cells.map((c) => c[2]), { method: 'log', bins: 6, palette })
+/** The study regions, tinted by a colour per region id. Selected regions get almost no tint, so their cells show. */
+export function regionsToFeatures(outlines: Outlines | null, colorOf: (id: string) => string, selected: string[]): FC {
+  if (!outlines) return EMPTY_FC
   return {
     type: 'FeatureCollection',
-    features: ov.cells.filter((c) => c[2] > 0).map(([lat, lon, v]) => ({
+    features: outlines.features.map((f) => ({
       type: 'Feature',
-      properties: { color: scale.colorOf(v), label: `${fmtCount(v)} hotspots per year` },
-      geometry: { type: 'Polygon', coordinates: [cellRing(cellId(lat, lon, ov.grid_deg), ov.grid_deg)] },
+      properties: { id: f.properties.id, name: f.properties.name, color: colorOf(f.properties.id), selected: selected.includes(f.properties.id) },
+      geometry: f.geometry,
     })),
   }
 }
 
-export function areaToFeatures(geometry: GeoJSON.Polygon | null): GeoJSON.FeatureCollection {
+export function areaToFeatures(geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null): GeoJSON.FeatureCollection {
   return { type: 'FeatureCollection', features: geometry ? [{ type: 'Feature', properties: {}, geometry }] : [] }
 }

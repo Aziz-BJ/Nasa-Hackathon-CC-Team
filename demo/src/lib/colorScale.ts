@@ -2,7 +2,7 @@
 // Colour ramps. Count bins are rebuilt from the values inside the selected months, so the
 // colours are relative to the time range (RAMP in config.ts sets the method; tune with real data).
 import { interpolateCividis, interpolateInferno, interpolateRdBu } from 'd3-scale-chromatic'
-import { quantile } from './indices'
+import { quantile, type VerdictLevel } from './indices'
 
 export type PaletteId = 'inferno' | 'cividis'
 export type RampMethod = 'quantile' | 'log'
@@ -80,14 +80,16 @@ export function buildCountScale(
     while (i + 1 < n && d >= edges[i + 1]) i++
     return i
   }
-  const labels = edges.map((lo, i) => (i + 1 < n ? `${fmtCount(lo)} to <${fmtCount(edges[i + 1])}` : `${fmtCount(lo)} to ${fmtCount(max)}`))
+  // Converted values can be tiny (0.02): the lowest bin then starts at "more than 0", not at a printed 0.
+  const low = (v: number, i: number) => (i === 0 && v === 0 ? 'more than 0' : fmtCount(v))
+  const labels = edges.map((lo, i) => (i + 1 < n ? `${low(lo, i)} to <${fmtCount(edges[i + 1])}` : `${low(lo, i)} to ${fmtCount(max)}`))
   return {
     edges, max, colors, labels, binOf,
     colorOf: (v) => (v === null ? NO_DATA_FILL : v <= 0 ? ZERO_FILL : colors[binOf(v)]),
   }
 }
 
-/** Anomaly bins in percent, symmetric around 0. Blue = fewer hotspots than usual, red = more (never red-green). */
+/** Anomaly bins in percent, symmetric around 0. Blue = less fire activity than usual, red = more (never red-green). */
 const ANOMALY_T = [0.92, 0.78, 0.64, 0.5, 0.36, 0.22, 0.08]
 export const ANOMALY_COLORS = ANOMALY_T.map((t) => interpolateRdBu(t))
 export const ANOMALY_LABELS = [
@@ -104,4 +106,13 @@ export function anomalyBin(pct: number): number {
 
 export function anomalyColor(pct: number | null): string {
   return pct === null ? NO_DATA_FILL : ANOMALY_COLORS[anomalyBin(pct)]
+}
+
+/** Region tints on the globe: the verdict for the chosen month, same blue-to-red ramp as the anomalies. */
+export const VERDICT_COLORS: Record<VerdictLevel, string> = {
+  'well-below': interpolateRdBu(0.88),
+  below: interpolateRdBu(0.7),
+  typical: interpolateRdBu(0.5),
+  above: interpolateRdBu(0.3),
+  'well-above': interpolateRdBu(0.12),
 }

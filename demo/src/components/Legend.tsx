@@ -16,10 +16,9 @@ export function CompactLegend({ scale, title }: { scale: CountScale; title: stri
     <div className="legend-compact">
       <div className="small">{title}</div>
       <ul aria-label={title}>
-        <li><span className="swatch" style={{ background: HATCH }} /><span className="tick">none</span><span className="sr-only">No sensor or not yet</span></li>
         <li><span className="swatch" style={{ background: ZERO_FILL }} /><span className="tick">0</span></li>
         {scale.colors.map((c, i) => (
-          <li key={c + i}><span className="swatch" style={{ background: c }} /><span className="tick" aria-hidden>{shortCount(scale.edges[i])}</span><span className="sr-only">{scale.labels[i]}</span></li>
+          <li key={c + i}><span className="swatch" style={{ background: c }} /><span className="tick" aria-hidden>{i === 0 && scale.edges[0] === 0 ? '>0' : shortCount(scale.edges[i])}</span><span className="sr-only">{scale.labels[i]}</span></li>
         ))}
       </ul>
     </div>
@@ -38,7 +37,22 @@ export function Legend({ scale, title, id, showNrt = false }: { scale: CountScal
       {showNrt && <>
         <span><span className="swatch" style={{ border: '1.5px dotted #fff' }} />Near real-time: provisional</span>
         <span><span className="swatch" style={{ boxShadow: 'inset 0 0 0 2px var(--yellow)' }} />Month to date</span>
+        <span><span className="swatch swatch-incomplete" />Some days without satellite data</span>
       </>}
+    </div>
+  )
+}
+
+/** The region tints on the globe. */
+export function VerdictKey({ title, colors, labels }: { title: string; colors: string[]; labels: string[] }) {
+  return (
+    <div className="legend-compact verdict-key">
+      <div className="small">{title}</div>
+      <ul aria-label={title}>
+        {colors.map((c, i) => (
+          <li key={c}><span className="swatch" style={{ background: c }} /><span className="tick">{labels[i]}</span></li>
+        ))}
+      </ul>
     </div>
   )
 }

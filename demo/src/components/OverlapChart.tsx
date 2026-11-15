@@ -1,5 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// The core evidence: raw MODIS and raw VIIRS disagree; the stitched raw record jumps in 2012; harmonized does not.
+// The core evidence: raw MODIS and raw VIIRS disagree; a record spliced from the raw counts jumps where the source
+// switches (July 2021, as in the harmonized record); the harmonized line does not.
 import * as Plot from '@observablehq/plot'
 import { useCallback } from 'react'
 import type { AreaSeries } from '../lib/aggregate'
@@ -9,16 +10,18 @@ import { PlotFigure } from './PlotFigure'
 
 // Okabe-Ito colours (safe for colour-vision deficiency) plus a dash pattern and a symbol per line.
 const STYLE: Record<string, { label: string; color: string; dash: string; symbol: string }> = {
-  harmonized: { label: 'Harmonized', color: '#ffffff', dash: '', symbol: 'circle' },
-  modis: { label: 'MODIS raw', color: '#E69F00', dash: '6,3', symbol: 'square' },
-  viirs_snpp: { label: 'VIIRS S-NPP raw', color: '#56B4E9', dash: '2,3', symbol: 'triangle' },
-  viirs_noaa20: { label: 'VIIRS NOAA-20 raw', color: '#009E73', dash: '8,3,2,3', symbol: 'diamond' },
-  stitched: { label: 'Raw record stitched (MODIS to 2011, then VIIRS)', color: '#CC79A7', dash: '1,0', symbol: 'cross' },
+  harmonized: { label: 'Harmonized (Aqua MODIS scale)', color: '#ffffff', dash: '', symbol: 'circle' },
+  modis: { label: 'Aqua MODIS raw', color: '#E69F00', dash: '6,3', symbol: 'square' },
+  viirs_snpp: { label: 'S-NPP VIIRS raw', color: '#56B4E9', dash: '2,3', symbol: 'triangle' },
+  viirs_noaa20: { label: 'NOAA-20 VIIRS raw', color: '#009E73', dash: '8,3,2,3', symbol: 'diamond' },
+  stitched: { label: 'Naive splice (raw Aqua, then raw S-NPP from July 2021)', color: '#CC79A7', dash: '1,0', symbol: 'cross' },
 }
 
 interface Row { key: string; year: number; v: number }
 
 /** Yearly totals per series. A year counts only when all 12 months exist for that series. */
+export const SWITCH_MONTH = '2021-07'
+
 export function yearlyTotals(s: AreaSeries): Row[] {
   const rows: Row[] = []
   const acc = new Map<string, { sum: number; n: number }>()
@@ -31,7 +34,7 @@ export function yearlyTotals(s: AreaSeries): Row[] {
   s.months.forEach((ym, i) => {
     const { year } = parseYm(ym)
     for (const key of SERIES_KEYS) add(key, year, s.values[key][i])
-    add('stitched', year, year < 2012 ? s.values.modis[i] : s.values.viirs_snpp[i] ?? s.values.viirs_noaa20[i])
+    add('stitched', year, ym < SWITCH_MONTH ? s.values.modis[i] : s.values.viirs_snpp[i] ?? s.values.viirs_noaa20[i])
   })
   for (const [k, a] of acc) {
     const [key, year] = k.split('|')
@@ -40,7 +43,7 @@ export function yearlyTotals(s: AreaSeries): Row[] {
   return rows.sort((a, b) => a.year - b.year)
 }
 
-export function OverlapChart({ series }: { series: AreaSeries }) {
+export function OverlapChart({ series, unit }: { series: AreaSeries; unit: string }) {
   const make = useCallback((width: number) => {
     const rows = yearlyTotals(series)
     const keys = Object.keys(STYLE).filter((k) => rows.some((r) => r.key === k))
@@ -48,10 +51,11 @@ export function OverlapChart({ series }: { series: AreaSeries }) {
       width, height: 360, marginLeft: 64, marginRight: 20,
       style: { background: 'transparent', color: 'rgba(235,235,245,0.85)', fontSize: '12px', fontFamily: 'inherit' },
       x: { label: null, tickFormat: 'd' },
-      y: { label: 'Hotspots detected per year', grid: true, zero: true },
+      y: { label: `${unit.charAt(0).toUpperCase() + unit.slice(1)} per year`, grid: true, zero: true },
       marks: [
-        Plot.ruleX([2012], { stroke: 'rgba(235,235,245,0.55)', strokeDasharray: '3,3' }),
-        Plot.text([2012], { x: (d: number) => d, frameAnchor: 'top', dy: 6, dx: 4, textAnchor: 'start', text: () => 'VIIRS S-NPP starts', fill: 'rgba(235,235,245,0.7)' }),
+        Plot.ruleX([2012, 2021.5], { stroke: 'rgba(235,235,245,0.55)', strokeDasharray: '3,3' }),
+        Plot.text([2012], { x: (d: number) => d, frameAnchor: 'top', dy: 6, dx: 4, textAnchor: 'start', text: () => 'S-NPP starts', fill: 'rgba(235,235,245,0.7)' }),
+        Plot.text([2021.5], { x: (d: number) => d, frameAnchor: 'top', dy: 22, dx: -4, textAnchor: 'end', text: () => 'record switches to converted VIIRS', fill: 'rgba(235,235,245,0.7)' }),
         ...keys.flatMap((k) => {
           const d = rows.filter((r) => r.key === k)
           const st = STYLE[k]
@@ -63,19 +67,20 @@ export function OverlapChart({ series }: { series: AreaSeries }) {
         }),
       ],
     })
-  }, [series])
+  }, [series, unit])
   return (
     <figure className="card" id="sensors">
       <header><h2>Why harmonize: one record, two instruments</h2></header>
-      <PlotFigure make={make} filename={"hotspots-modis-vs-viirs.svg"} label="Line chart of yearly hotspot totals for raw MODIS, raw VIIRS, the stitched raw record and the harmonized record." />
+      <PlotFigure make={make} filename={"modis-vs-viirs.svg"} label={`Line chart of yearly ${unit} for raw Aqua MODIS, raw S-NPP and NOAA-20 VIIRS, a naive splice of the raw counts, and the harmonized record.`} />
       <div className="legend" aria-label="Lines">
         {Object.entries(STYLE).map(([k, st]) => (
           <span key={k}><span className="swatch" style={{ background: 'none', borderTop: `3px ${st.dash ? 'dashed' : 'solid'} ${st.color}`, height: 0 }} />{st.label}</span>
         ))}
       </div>
       <figcaption className="caption">
-        Whole record for this area, full calendar years only. VIIRS detects smaller fires than MODIS, so joining the raw records makes a false jump in 2012 (pink).
-        The harmonized line puts every year on one scale.
+        Whole record for this area, full calendar years only. VIIRS sees much smaller fires than MODIS (375 m pixels against 1 km), so it counts several times more fire cell-days.
+        Splicing the raw counts where the record changes source (pink) makes a false jump. The harmonized line converts VIIRS to the Aqua MODIS scale, so every year is comparable.
+        Aqua's own line after 2021 drifts with its orbit and is not used in the record.
       </figcaption>
     </figure>
   )

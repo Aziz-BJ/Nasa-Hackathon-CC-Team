@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // A timeline from the first to the last month with two handles. The track can be coloured with the area's
-// monthly hotspot counts, so busy seasons are visible while choosing. Drag a handle (it stays under the pointer),
+// monthly fire activity, so busy seasons are visible while choosing. Drag a handle (it stays under the pointer),
 // click the track to move the nearer handle, or use the keyboard: arrows = 1 month, Page Up/Down = 1 year, Home/End.
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react'
 import { addMonths, labelYm, monthsBetween, parseYm, type YearMonth } from '../lib/months'

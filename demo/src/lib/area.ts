@@ -4,16 +4,20 @@ import { bbox as turfBbox } from '@turf/bbox'
 import { bboxPolygon } from '@turf/bbox-polygon'
 import { circle } from '@turf/circle'
 import { MAX_AREA_KM2 } from '../config'
-import type { Bbox } from './grid'
+import type { Outlines } from './data'
+import { unionBbox, type Bbox } from './grid'
+import type { Manifest } from './types'
 
-export type AreaSource = 'preset' | 'drawn' | 'bbox' | 'point'
+export type AreaSource = 'region' | 'drawn' | 'bbox' | 'point'
 
 export interface Area {
   label: string
   source: AreaSource
-  /** Set when the area is a preset, so preset-only data (reported fires) can be matched. */
-  presetId?: string
-  geometry: GeoJSON.Polygon
+  /** Whole regions: their numbers and 90% ranges come straight from the harmonized record. */
+  regionIds?: string[]
+  /** The region or group id, for links and region-only data (reported fires). */
+  regionKey?: string
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon
   bbox: Bbox
   areaKm2: number
 }
@@ -67,12 +71,32 @@ export function areaFromPolygon(geometry: GeoJSON.Polygon, label = 'Drawn area')
 
 /** Drawn shapes follow the same rules as typed ones: no 180° crossing, and the size limit. */
 export function validateDrawn(a: Area): string | null {
+  if (a.geometry.type !== 'Polygon') return null
   const ring = a.geometry.coordinates[0]
   const crosses = ring.some(([lon], i) => Math.abs(lon) > 180 || (i > 0 && Math.abs(lon - ring[i - 1][0]) > 180))
   if (crosses) return 'This shape crosses the 180° line, which is not supported yet. Draw it on one side of the line.'
   return checkSize(a)
 }
 
-export function areaFromPreset(p: { id: string; name: string; bbox: Bbox }): Area {
-  return { ...areaFromBbox(p.bbox, p.name, 'preset'), presetId: p.id }
+/** The regions a region id or group id stands for, or null when it is neither. */
+export function regionIdsFor(m: Manifest, key: string): string[] | null {
+  if (m.regions.some((r) => r.id === key)) return [key]
+  return m.groups.find((g) => g.id === key)?.regions ?? null
+}
+
+/** A whole region, or a group of regions, as an area. Its outline is drawn exactly as the pipeline defined it. */
+export function areaFromRegion(m: Manifest, outlines: Outlines | null, key: string): Area | null {
+  const ids = regionIdsFor(m, key)
+  if (!ids) return null
+  const regions = m.regions.filter((r) => ids.includes(r.id))
+  const label = m.regions.find((r) => r.id === key)?.name ?? m.groups.find((g) => g.id === key)?.name ?? key
+  const bbox = unionBbox(regions.map((r) => r.bbox))
+  const shapes = outlines?.features.filter((f) => ids.includes(f.properties.id)) ?? []
+  const geometry: GeoJSON.MultiPolygon | GeoJSON.Polygon = shapes.length
+    ? { type: 'MultiPolygon', coordinates: shapes.flatMap((f) => f.geometry.coordinates) }
+    : bboxPolygon(bbox).geometry
+  return {
+    label, source: 'region', regionIds: ids, regionKey: key, geometry, bbox,
+    areaKm2: regions.reduce((a, r) => a + r.area_km2, 0),
+  }
 }

@@ -70,21 +70,26 @@ const TOOL_LABEL: Record<Exclude<DrawTool, 'pan'>, string> = {
 export interface GlobeMapProps {
   area: Area | null
   cells: GeoJSON.FeatureCollection
-  overview: GeoJSON.FeatureCollection
+  /** The study regions, tinted (properties: id, name, color, selected). */
+  regions: GeoJSON.FeatureCollection
   tool: DrawTool
   basemap: Basemap
   /** Country borders and place names. */
   labels: boolean
   /** Called once when the user finishes drawing a shape. */
   onDrawn: (area: Area) => void
+  /** Called with a region id when the user clicks a region while moving the globe. */
+  onRegionClick: (id: string) => void
 }
 
-export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn }: GlobeMapProps) {
+export function GlobeMap({ area, cells, regions, tool, basemap, labels, onDrawn, onRegionClick }: GlobeMapProps) {
   const container = useRef<HTMLDivElement>(null)
   const mapRef = useRef<MLMap | null>(null)
   const drawRef = useRef<TerraDraw | null>(null)
   const onDrawnRef = useRef(onDrawn)
   onDrawnRef.current = onDrawn
+  const onRegionRef = useRef(onRegionClick)
+  onRegionRef.current = onRegionClick
   const toolRef = useRef(tool)
   toolRef.current = tool
   const [ready, setReady] = useState(false)
@@ -107,8 +112,19 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
     mapRef.current = map
     map.addControl(new NavigationControl({ visualizePitch: false }), 'bottom-right')
     map.on('load', () => {
-      map.addSource('overview', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
-      map.addLayer({ id: 'overview', type: 'fill', source: 'overview', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.4 } }, 'borders')
+      map.addSource('regions', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
+      // Unselected regions carry their verdict tint; a selected region is almost clear so its fire cells read well.
+      map.addLayer({ id: 'regions', type: 'fill', source: 'regions',
+        paint: { 'fill-color': ['get', 'color'], 'fill-opacity': ['case', ['get', 'selected'], 0.06, 0.4] } }, 'borders')
+      map.addLayer({ id: 'regions-outline', type: 'line', source: 'regions',
+        paint: { 'line-color': '#ffffff', 'line-opacity': 0.7, 'line-width': ['interpolate', ['linear'], ['zoom'], 1, 0.8, 7, 1.6] } }, 'borders')
+      map.on('click', 'regions', (e) => {
+        if (toolRef.current !== 'pan') return
+        const id = e.features?.[0]?.properties?.id
+        if (typeof id === 'string') onRegionRef.current(id)
+      })
+      map.on('mouseenter', 'regions', () => { if (toolRef.current === 'pan') map.getCanvas().style.cursor = 'pointer' })
+      map.on('mouseleave', 'regions', () => { map.getCanvas().style.cursor = '' })
       map.addSource('cells', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } })
       map.addLayer({ id: 'cells', type: 'fill', source: 'cells', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.8 } }, 'borders')
       map.addLayer({ id: 'cells-outline', type: 'line', source: 'cells', paint: { 'line-color': '#000000', 'line-opacity': 0.35, 'line-width': 0.5 } }, 'borders')
@@ -155,8 +171,8 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
   }, [ready, tool])
 
   useEffect(() => {
-    if (ready) (mapRef.current?.getSource('overview') as GeoJSONSource | undefined)?.setData(overview)
-  }, [ready, overview])
+    if (ready) (mapRef.current?.getSource('regions') as GeoJSONSource | undefined)?.setData(regions)
+  }, [ready, regions])
 
   useEffect(() => {
     if (ready) (mapRef.current?.getSource('cells') as GeoJSONSource | undefined)?.setData(cells)
@@ -171,7 +187,7 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
       // Keep the area clear of the floating controls (top bar, side boxes, bottom strip).
       const phone = map.getContainer().clientWidth < 760
       const padding = phone ? { top: 70, bottom: 250, left: 20, right: 20 } : { top: 90, bottom: 150, left: 110, right: 110 }
-      map.fitBounds([[w, s], [e, n]], { padding, maxZoom: 6, duration: 1200 })
+      map.fitBounds([[w, s], [e, n]], { padding, maxZoom: 9, duration: 1200 })
     }
   }, [ready, area])
 
@@ -186,9 +202,9 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
   if (failed) {
     return (
       <div className="map-fallback" role="note">
-        The 3D globe could not start ({failed}). It needs WebGL2. Presets and typed coordinates still work, and every chart below is unaffected.
+        The 3D globe could not start ({failed}). It needs WebGL2. The region list and typed coordinates still work, and every chart is unaffected.
       </div>
     )
   }
-  return <div ref={container} className="globe" role="region" aria-label="Globe map. Use the area tools or the coordinate form to choose an area." />
+  return <div ref={container} className="globe" role="region" aria-label="Globe map. Click a study region, use the drawing tools, or type coordinates in the Area panel." />
 }

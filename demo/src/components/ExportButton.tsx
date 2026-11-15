@@ -24,7 +24,7 @@ export function ExportButton({ manifest, area, series, i0, i1 }: {
   }
   return (
     <div>
-      <p>Monthly hotspot counts for this area and these months ({series.months[i0]} to {series.months[i1]}), with every sensor, the data status and a provenance header.</p>
+      <p>Monthly fire cell-days for this area and these months ({series.months[i0]} to {series.months[i1]}): the harmonized record{series.low ? ' with its 90% range' : ''}, the raw count of every satellite, the source of each month, the comparison with {manifest.baseline_years[0]} to {manifest.baseline_years[1]}, and a header saying how it was made.</p>
       <button type="button" className="btn btn-primary" onClick={download}><DownloadSimple aria-hidden /> Download CSV</button>
       <p className="small muted" style={{ marginTop: '0.75rem' }}>Every chart (Trends, Sensors, Reported) also has a "Download image" button.</p>
       <h3 style={{ marginTop: '1.25rem' }}>Share this view</h3>
