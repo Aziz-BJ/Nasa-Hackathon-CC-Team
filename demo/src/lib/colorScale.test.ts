@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
-import { anomalyBin, anomalyColor, buildCountScale, displayRound, NO_DATA_FILL, ZERO_FILL } from './colorScale'
+import { anomalyBin, anomalyColor, buildCountScale, displayRound, NO_DATA_FILL, VERDICT_COLORS, ZERO_FILL } from './colorScale'
 
 describe('buildCountScale', () => {
   const values = [null, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 100]
@@ -57,5 +57,32 @@ describe('anomaly colours', () => {
     expect([anomalyBin(-51), anomalyBin(51)]).toEqual([0, 6])
     expect(anomalyBin(300)).toBe(6)
     expect(anomalyColor(null)).toBe(NO_DATA_FILL)
+  })
+})
+
+describe('converted (fractional) counts', () => {
+  it('starts the lowest bin at "more than 0" when the smallest value rounds to 0', () => {
+    const s = buildCountScale([0.004, 0.5, 3, 40, 200], { method: 'quantile', bins: 4, palette: 'inferno' })
+    expect(s.edges[0]).toBe(0)
+    expect(s.labels[0]).toMatch(/^more than 0 to </)
+    expect(s.colorOf(0.004)).toBe(s.colors[0]) // positive, so not the zero colour
+    expect(s.colorOf(0)).toBe(ZERO_FILL)
+  })
+  it('prints ordinary lower bounds otherwise', () => {
+    const s = buildCountScale([1, 5, 40, 200], { method: 'quantile', bins: 3, palette: 'inferno' })
+    expect(s.labels[0]).toMatch(/^1 to </)
+  })
+})
+
+describe('VERDICT_COLORS', () => {
+  it('has a distinct colour for each verdict, from blue (well below) to red (well above)', () => {
+    const order = ['well-below', 'below', 'typical', 'above', 'well-above'] as const
+    const colors = order.map((k) => VERDICT_COLORS[k])
+    expect(new Set(colors).size).toBe(5)
+    const rgb = (c: string) => (/rgb\((\d+), (\d+), (\d+)\)/.exec(c) ?? []).slice(1).map(Number)
+    const [r0, , b0] = rgb(colors[0])
+    const [r4, , b4] = rgb(colors[4])
+    expect(b0).toBeGreaterThan(r0) // blue
+    expect(r4).toBeGreaterThan(b4) // red
   })
 })

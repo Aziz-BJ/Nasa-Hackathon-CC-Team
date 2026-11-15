@@ -1,24 +1,56 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
-import { cellCentre, cellId, cellRing, tilesForBbox } from './grid'
+import { bboxesOverlap, cellSquare, unionBbox } from './grid'
 
-describe('grid', () => {
-  it('matches the contract example (0.25 deg)', () => {
-    // HANDOVER 7.2 example: lat 38.125, lon -1.875 -> "512_712"
-    expect(cellId(38.125, -1.875, 0.25)).toBe('512_712')
-    expect(cellCentre('512_712', 0.25)).toEqual({ lat: 38.125, lon: -1.875 })
+describe('cellSquare', () => {
+  it('is a closed ring in lon, lat order around the centre', () => {
+    const ring = cellSquare(40, 9, 5)
+    expect(ring).toHaveLength(5)
+    expect(ring[0]).toEqual(ring[4])
+    const lons = ring.map((p) => p[0])
+    const lats = ring.map((p) => p[1])
+    expect((Math.min(...lons) + Math.max(...lons)) / 2).toBeCloseTo(9, 5)
+    expect((Math.min(...lats) + Math.max(...lats)) / 2).toBeCloseTo(40, 5)
   })
-  it('clamps the north pole and the antimeridian into the last cell', () => {
-    expect(cellId(90, 180, 1)).toBe('179_359')
+  it('is 5 km tall everywhere and 5 km wide after the cos(lat) correction', () => {
+    for (const lat of [0, 38, 60]) {
+      const ring = cellSquare(lat, 0, 5)
+      const height = (ring[2][1] - ring[0][1]) * 111.32
+      const width = (ring[1][0] - ring[0][0]) * 111.32 * Math.cos((lat * Math.PI) / 180)
+      expect(height).toBeCloseTo(5, 3)
+      expect(width).toBeCloseTo(5, 3)
+    }
   })
-  it('builds a closed ring', () => {
-    const ring = cellRing('90_180', 1)
-    expect(ring[0]).toEqual([0, 0])
-    expect(ring[2]).toEqual([1, 1])
-    expect(ring[4]).toEqual(ring[0])
+  it('goes counter-clockwise (south-west, south-east, north-east, north-west)', () => {
+    const [sw, se, ne, nw] = cellSquare(10, 10, 5)
+    expect(se[0]).toBeGreaterThan(sw[0])
+    expect(ne[1]).toBeGreaterThan(se[1])
+    expect(nw[0]).toBeLessThan(ne[0])
   })
-  it('finds overlapping tiles without spilling over exact edges', () => {
-    expect(tilesForBbox([0, 0, 10, 10], 10)).toEqual(['9_18'])
-    expect(tilesForBbox([-5, -5, 5, 5], 10)).toEqual(['8_17', '8_18', '9_17', '9_18'])
+  it('scales with the side length', () => {
+    const a = cellSquare(0, 0, 5)
+    const b = cellSquare(0, 0, 10)
+    expect(b[1][0] - b[0][0]).toBeCloseTo(2 * (a[1][0] - a[0][0]), 5)
+  })
+})
+
+describe('bboxesOverlap', () => {
+  it('detects overlap, containment and touching edges', () => {
+    expect(bboxesOverlap([0, 0, 2, 2], [1, 1, 3, 3])).toBe(true)
+    expect(bboxesOverlap([0, 0, 10, 10], [4, 4, 5, 5])).toBe(true)
+    expect(bboxesOverlap([0, 0, 1, 1], [1, 1, 2, 2])).toBe(true) // sharing a corner counts
+  })
+  it('rejects boxes that are apart in longitude or latitude', () => {
+    expect(bboxesOverlap([0, 0, 1, 1], [2, 0, 3, 1])).toBe(false)
+    expect(bboxesOverlap([0, 0, 1, 1], [0, 2, 1, 3])).toBe(false)
+  })
+})
+
+describe('unionBbox', () => {
+  it('spans all the boxes', () => {
+    expect(unionBbox([[6, 38, 18, 47], [12, 35, 15, 38], [8, 38, 10, 41]])).toEqual([6, 35, 18, 47])
+  })
+  it('returns a single box unchanged', () => {
+    expect(unionBbox([[1, 2, 3, 4]])).toEqual([1, 2, 3, 4])
   })
 })
