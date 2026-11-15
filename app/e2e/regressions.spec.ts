@@ -5,7 +5,6 @@ import { expect, test } from '@playwright/test'
 test.beforeEach(async ({ context, page }) => {
   // Map tiles come from third parties: never load them in tests.
   await context.route((u) => u.hostname !== 'localhost', (r) => r.abort())
-  await page.addInitScript(() => localStorage.setItem('hotspot-calendar-guide-seen', '1'))
 })
 
 const VIEW = '#area=region:sicily&from=2015-01&to=2024-10&src=modis&pal=cividis'
