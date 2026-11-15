@@ -5,6 +5,12 @@ import { readFileSync } from 'node:fs'
 
 const selection = (page: Page) => page.locator('[data-tour="selection"]')
 const headline = (page: Page) => page.locator('.strip-headline')
+/** Waits for finite CSS transitions and animations (drawers sliding in) to end, so checks see the final colours. */
+async function settled(page: Page) {
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+    .map((a) => a.finished.catch(() => undefined))))
+}
 async function openPanel(page: Page, name: string) {
   await page.getByRole('button', { name, exact: true }).click()
   await expect(page.locator('#drawer')).toBeVisible()
@@ -82,16 +88,21 @@ test.describe('app', () => {
 
   test('drawing a circle on the globe selects an area', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Drawing is checked on desktop; phones use the region list and typed coordinates.')
-    await page.waitForTimeout(2000) // let the globe finish flying to the first region
     await openPanel(page, 'Area')
-    await page.getByRole('button', { name: 'Circle' }).click()
     const { width, height } = page.viewportSize()!
     const [x, y] = [width * 0.68, height * 0.45] // right of the drawer, left of the boxes
-    await page.mouse.move(x, y)
-    await page.mouse.down()
-    await page.mouse.move(x + 50, y + 30, { steps: 8 })
-    await page.mouse.up()
-    await expect(selection(page)).toContainText('Drawn circle')
+    // The globe loads as its own file and then flies to the first region; a shape drawn during that flight is lost.
+    // Draw until it sticks rather than guessing how long the start takes.
+    await expect(async () => {
+      // Back to "Move globe" first: that clears a circle half-started by a missed attempt.
+      await page.getByRole('button', { name: 'Move globe' }).click()
+      await page.getByRole('button', { name: 'Circle' }).click()
+      await page.mouse.move(x, y)
+      await page.mouse.down()
+      await page.mouse.move(x + 50, y + 30, { steps: 8 })
+      await page.mouse.up()
+      await expect(selection(page)).toContainText('Drawn circle', { timeout: 2000 })
+    }).toPass({ timeout: 20_000 })
   })
 
   test('changing months rescales the calendar and keyboard moves between months', async ({ page }) => {
@@ -207,7 +218,11 @@ test.describe('app', () => {
   })
 
   test('no automatic accessibility violations', async ({ page }) => {
-    const scan = async () => (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => `${v.id}: ${v.help}`)
+    const scan = async () => {
+      await settled(page)
+      return (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations
+        .map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(' ')).join(', ')})`)
+    }
     expect(await scan()).toEqual([])
     await openPanel(page, 'Calendar')
     expect(await scan()).toEqual([])

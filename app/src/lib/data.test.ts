@@ -177,7 +177,7 @@ describe('createDataSource', () => {
     expect(await ds.detectionsIndex()).toEqual(index)
     expect(await ds.detectionsIndex()).toEqual(index)
     expect(fetchFn).toHaveBeenCalledTimes(3)
-    expect(fetchFn).toHaveBeenLastCalledWith('/data/x/detections/index.json')
+    expect(fetchFn.mock.lastCall?.[0]).toBe('/data/x/detections/index.json')
   })
   it('rejects a detections file whose lists are missing or of different lengths', async () => {
     const good = { region: 'aa', year: 2020, lon0: 0, lat0: 0, s: [0], d: [1], x: [2], y: [3], w: [100], h: [100], p: [12], t: [0], c: [80], q: [0] }
