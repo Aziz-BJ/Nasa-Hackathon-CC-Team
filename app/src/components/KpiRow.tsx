@@ -84,12 +84,12 @@ export function KpiRow(p: KpiRowProps) {
         <div className="kpi">
           <div className="small muted">Rank among {what}</div>
           <div className="value">{f.rank ? ordinal(f.rank.rank) : 'n/a'}</div>
-          {f.rank && <div className="small">busiest of {f.rank.of} ({y0} to {y1} plus {parseYm(f.month).year})</div>}
+          {f.rank && <div className="small">busiest of {f.rank.of} ({y0} to {y1}{fy >= y0 && fy <= y1 ? '' : ` plus ${fy}`})</div>}
         </div>
       </div>
       {partial && <p className="notice">{calName} {parseYm(f.month).year} is not finished, so it is compared with the same days in earlier years, not with whole months.</p>}
       <p className="caption">
-        Compared with {y0} to {y1}, leaving out {parseYm(f.month).year} itself. {p.seriesLabel}. {p.sourceLine} {p.sensorsLine}
+        {p.noVerdictReason ? 'Not compared with earlier years.' : `Compared with ${y0} to ${y1}, leaving out ${fy} itself.`} {p.seriesLabel}. {p.sourceLine} {p.sensorsLine}
         {' '}Fire cell-days count satellite detections, not fires or burned area. Below a median of {MIN_DENOMINATOR}, differences are shown as plain numbers, not percentages.
       </p>
     </section>

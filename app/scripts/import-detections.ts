@@ -30,6 +30,11 @@ const all = (await parquetReadObjects({ file, columns: COLUMNS })) as unknown as
 const rows = all.filter((r) => keepRow(r, manifest.last_day))
 console.log(`Read ${all.length.toLocaleString('en-GB')} detections; ${(all.length - rows.length).toLocaleString('en-GB')} dated after ${manifest.last_day} dropped.`)
 
+// Guard: this folder is deleted and rewritten, so refuse anything that is not a detections folder.
+if (!/detections\/?$/.test(out)) {
+  console.error(`Refusing to overwrite ${out}: the output folder must be named "detections".`)
+  process.exit(1)
+}
 rmSync(out, { recursive: true, force: true })
 const index: { schema_version: 1; last_day: string; satellites: readonly string[]; regions: Record<string, Record<string, [number, number, number]>> } = {
   schema_version: 1, last_day: manifest.last_day, satellites: SATELLITES, regions: {},

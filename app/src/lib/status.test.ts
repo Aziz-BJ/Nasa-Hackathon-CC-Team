@@ -1,7 +1,7 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
 import { FIX_MANIFEST } from '../test/fixtures'
-import { inSpan, monthIndex, monthStatus, noVerdictReason, sensorsIn, seriesSpan, sourceCode, sourceOf, STATUS_LABELS } from './status'
+import { comparableValues, inSpan, monthIndex, monthStatus, noVerdictReason, sensorsIn, seriesSpan, sourceCode, sourceOf, STATUS_LABELS } from './status'
 
 const m = FIX_MANIFEST // 2019-01..2020-12, nrt from 2020-10, 2020-12 month to date, S-NPP from 2019-07, NOAA-20 from 2020-06
 
@@ -96,14 +96,20 @@ describe('sourceOf and sourceCode', () => {
 })
 
 describe('noVerdictReason', () => {
-  it('gives no verdict to a month with days missing every satellite, only in the harmonized record', () => {
+  it('gives no verdict to a month with days missing every satellite, in every series that flew', () => {
     expect(monthStatus(m, '2020-05')).toBe('incomplete')
-    expect(noVerdictReason(m, 'harmonized', '2020-05')).toMatch(/no satellite data/)
+    expect(noVerdictReason(m, 'harmonized', '2020-05')?.long).toMatch(/no satellite data/)
+    expect(noVerdictReason(m, 'modis', '2020-05')?.short).toBe('incomplete month, no verdict')
     expect(noVerdictReason(m, 'harmonized', '2020-04')).toBeNull()
   })
   it('gives no verdict to raw Aqua once its orbit has drifted (July 2021 on)', () => {
     expect(noVerdictReason(m, 'modis', '2021-06')).toBeNull()
-    expect(noVerdictReason(m, 'modis', '2021-07')).toMatch(/orbit has drifted/)
+    expect(noVerdictReason(m, 'modis', '2021-07')?.long).toMatch(/orbit has drifted/)
     expect(noVerdictReason(m, 'viirs_snpp', '2021-07')).toBeNull()
+  })
+  it('leaves drifted raw Aqua out of every baseline, and nothing else', () => {
+    const months = ['2021-05', '2021-06', '2021-07', '2022-01']
+    expect(comparableValues('modis', months, [1, 2, 3, 4])).toEqual([1, 2, null, null])
+    expect(comparableValues('harmonized', months, [1, 2, 3, 4])).toEqual([1, 2, 3, 4])
   })
 })

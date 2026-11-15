@@ -301,3 +301,10 @@ label.indent { padding-left: 1.4rem; }
 .legend-detections ul { list-style: none; margin: 0.15rem 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.25rem 0.9rem; }
 .legend-detections li { display: flex; align-items: center; gap: 0.35rem; }
 .legend-detections li.off { opacity: 0.55; }
+
+/* Phones: the detections key keeps its counts; the notes are in the Layers panel and About. */
+@media (max-width: 760px) {
+  .legend-detections .det-note { display: none; }
+}
+.verdict-key li:last-child { margin-left: 0.4rem; }
+.verdict-key li:last-child .swatch { border-radius: 3px; }

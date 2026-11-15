@@ -36,11 +36,31 @@ export function monthStatus(m: Manifest, ym: YearMonth, key: SeriesKey = 'harmon
 /** Aqua's orbit drifts later in the day from this month; the record stops using measured Aqua here (METHOD.md). */
 export const AQUA_DRIFT_FROM: YearMonth = '2021-07'
 
-/** Why a month gets no verdict even though it has a value, or null when a verdict is fair. */
-export function noVerdictReason(m: Manifest, key: SeriesKey, ym: YearMonth): string | null {
-  if (monthStatus(m, ym, key) === 'incomplete') return 'Some days of this month had no satellite data, so it is not compared with full months.'
-  if (key === 'modis' && ym >= AQUA_DRIFT_FROM) return "Aqua's orbit has drifted later in the day since July 2021, so raw Aqua after that is not compared with earlier years."
+export interface NoVerdict {
+  /** For the headline, e.g. "incomplete month, no verdict". */
+  short: string
+  /** For the summary, a full sentence. */
+  long: string
+}
+
+/**
+ * Why a month gets no comparison even though it has a value, or null when comparing is fair: days with no satellite
+ * at all (July to September 2002, in every series), or raw Aqua after its orbit drift.
+ */
+export function noVerdictReason(m: Manifest, key: SeriesKey, ym: YearMonth): NoVerdict | null {
+  const i = monthIndex(m, ym)
+  if (i >= 0 && (m.days.none[i] ?? 0) > 0 && monthStatus(m, ym, key) !== 'no_sensor') {
+    return { short: 'incomplete month, no verdict', long: 'Some days of this month had no satellite data, so it is not compared with full months.' }
+  }
+  if (key === 'modis' && ym >= AQUA_DRIFT_FROM) {
+    return { short: 'no verdict (Aqua orbit drift)', long: "Aqua's orbit has drifted later in the day since July 2021, so raw Aqua after that is not compared with earlier years." }
+  }
   return null
+}
+
+/** The values a comparison may use: raw Aqua from July 2021 on is left out of every baseline (drifted orbit). */
+export function comparableValues(key: SeriesKey, months: YearMonth[], values: (number | null)[]): (number | null)[] {
+  return key === 'modis' ? values.map((v, i) => (months[i] >= AQUA_DRIFT_FROM ? null : v)) : values
 }
 
 export function sensorsIn(m: Manifest, ym: YearMonth): SensorInfo[] {

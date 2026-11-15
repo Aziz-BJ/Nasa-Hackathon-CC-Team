@@ -46,7 +46,7 @@ describe('KpiRow, a finished month', () => {
     expect(screen.getByText('vs typical August (median)')).toBeInTheDocument()
     expect(screen.getByText('+300%')).toBeInTheDocument() // (80 - 20) / 20
     expect(screen.getByText('Median 20, robust z 4.0')).toBeInTheDocument()
-    expect(screen.getByText('busiest of 4 (2003 to 2006 plus 2006)')).toBeInTheDocument()
+    expect(screen.getByText('busiest of 4 (2003 to 2006)')).toBeInTheDocument()
   })
   it('shows the year to date', () => {
     render(<KpiRow {...props()} />)
@@ -79,6 +79,7 @@ describe('KpiRow, a finished month', () => {
     render(<KpiRow {...props({ focus: sum, noVerdictReason: 'Some days of this month had no satellite data.' })} />)
     expect(screen.getByText('Some days of this month had no satellite data.')).toBeInTheDocument()
     expect(screen.queryByText('Not enough baseline years to compare.')).not.toBeInTheDocument()
+    expect(screen.getByText(/Not compared with earlier years\./)).toBeInTheDocument()
   })
   it('names the years actually compared when a raw sensor starts after the baseline does', () => {
     // Like S-NPP: no data before 2005, so the 2003-2025 baseline really uses 2005-2009 for August 2010 (span shown 2005 to 2010).

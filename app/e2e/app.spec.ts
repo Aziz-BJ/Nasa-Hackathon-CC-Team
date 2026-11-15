@@ -197,6 +197,9 @@ test.describe('app', () => {
     await expect(headline(page)).toContainText('incomplete month, no verdict')
     await page.goto('/#area=region:sicily&from=2022-01&to=2022-08&src=modis')
     await expect(headline(page)).toContainText('no verdict (Aqua orbit drift)')
+    await page.getByRole('button', { name: 'More info' }).click()
+    await expect(page.locator('.caption').first()).toContainText('Not compared with earlier years.')
+    await expect(page.locator('#kpi-title').locator('..')).not.toContainText('busiest of')
   })
 
   test('no automatic accessibility violations', async ({ page }) => {

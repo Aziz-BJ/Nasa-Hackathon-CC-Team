@@ -92,6 +92,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
         <li>Typical: the median of the baseline years. Difference: (value − median) / median; for medians below 5 the app shows the plain difference. Robust z: (value − median) / (1.4826 × median absolute deviation).</li>
         <li>Percentile: the share of baseline years at or below the value. Verdict words: below 10th "well below", 10th to 25th "below", 25th to 75th "near typical", 75th to 90th "above", over 90th "well above". A value within half a fire cell-day of the median is "near typical" whatever its percentile (in quiet months many years tie at 0). The number is always shown next to the words.</li>
         <li>The unfinished month ({m.last_month}, data to {m.last_day}) is compared with the same days in earlier years, never with whole months.</li>
+        <li>Not compared at all: months with days when no satellite flew (July to September 2002), and raw Aqua MODIS from July 2021, when its orbit had drifted. Raw Aqua comparisons for earlier months leave the drifted years out of the baseline; raw S-NPP and NOAA-20 are compared only with the years they flew.</li>
         <li>Colours: the fire cell ramp is rebuilt from the months you choose, so it always uses the whole ramp. Region tints show the verdict for the last chosen month.</li>
       </ul>
 

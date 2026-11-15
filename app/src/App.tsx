@@ -39,7 +39,7 @@ import { saveFile } from './lib/download'
 import { calendarMedians, compareWith, summarizeMonth, summarizeMtd, VERDICT_LABELS, yearToDate, type MonthSummary, type VerdictLevel } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, regionsToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm, monthRange, MONTH_LONG, parseYm, type YearMonth } from './lib/months'
-import { monthIndex, monthStatus, noVerdictReason, sensorsIn, sourceCode, sourceOf } from './lib/status'
+import { comparableValues, monthIndex, monthStatus, noVerdictReason, sensorsIn, sourceCode, sourceOf } from './lib/status'
 import { SERIES_LABELS, type DetectionsFile, type DetectionsIndex, type Manifest, type RegionsFile, type ReportedFile, type SeriesKey } from './lib/types'
 import { initialState, reducer, type AppState } from './state/appState'
 import { applyUrl, parseHash, toHash } from './state/urlState'
@@ -82,9 +82,9 @@ function compareMonth(m: Manifest, series: AreaSeries, key: SeriesKey, ym: YearM
     // Only the harmonized record has month-to-date values for past years.
     return key === 'harmonized' && series.mtd ? summarizeMtd(series.mtd, ym, m.baseline_years) : compareWith(ym, values[monthIndex(m, ym)], null)
   }
-  const sum = summarizeMonth(values, series.months, ym, m.baseline_years)
-  // Incomplete months (days without any satellite) and drifted raw Aqua keep their numbers but get no verdict word.
-  return noVerdictReason(m, key, ym) ? { ...sum, verdict: null } : sum
+  // Incomplete months and drifted raw Aqua keep their value but are not compared at all (no verdict, rank or median).
+  if (noVerdictReason(m, key, ym)) return compareWith(ym, values[monthIndex(m, ym)], null)
+  return summarizeMonth(comparableValues(key, series.months, values), series.months, ym, m.baseline_years)
 }
 
 function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest; rf: RegionsFile; outlines: Outlines | null; reported: ReportedFile | null }) {
@@ -150,9 +150,9 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   const detKey = detShow && s.area ? regionsTouching(m, s.area)
     .flatMap((r) => yearsToLoad(Object.keys(detIndex!.regions[r] ?? {}), s.from, s.to).map((y) => `${r}/${y}`)).join(',') : ''
   useEffect(() => {
+    setDetError(null)
     if (!detKey) return
     let cancelled = false
-    setDetError(null)
     Promise.all(detKey.split(',').map((k) => { const [r, y] = k.split('/'); return dataSource.detections(r, Number(y)) }))
       .then((files) => { if (!cancelled) setDetFiles({ key: detKey, files }) })
       .catch((e: unknown) => { if (!cancelled) setDetError(e instanceof Error ? e.message : String(e)) })
@@ -210,7 +210,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   })()
   const rangeNote = !harmonizedSource ? null : series?.estimate ? 'estimate' as const
     : !range && sourceCode(m, s.to) === 'measured_aqua' ? 'measured' as const : null
-  const ytd = series ? yearToDate(values, series.months, s.to, m.baseline_years) : null
+  const ytd = series && !noVerdictReason(m, s.source, s.to) ? yearToDate(comparableValues(s.source, series.months, values), series.months, s.to, m.baseline_years) : null
   let total: number | null = null
   let monthsWithData = 0
   for (let i = i0; i >= 0 && i <= i1; i++) {
@@ -338,11 +338,10 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
         {focus.verdict && focus.percentile !== null
           ? <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile{partial ? ' of the same days' : ''})</>
           : partial ? ' · not comparable yet'
-          : monthStatus(m, s.to, s.source) === 'incomplete' ? ' · incomplete month, no verdict'
-          : noVerdictReason(m, s.source, s.to) ? ' · no verdict (Aqua orbit drift)' : null}</>
+          : noVerdictReason(m, s.source, s.to) ? ` · ${noVerdictReason(m, s.source, s.to)!.short}` : null}</>
 
   const verdictKey = <VerdictKey title={`Region tint: ${labelYm(s.to)} compared with usual`}
-    colors={VERDICT_ORDER.map((v) => VERDICT_COLORS[v])} labels={['well below', 'below', 'typical', 'above', 'well above']} />
+    colors={[...VERDICT_ORDER.map((v) => VERDICT_COLORS[v]), NO_VERDICT_COLOR]} labels={['well below', 'below', 'typical', 'above', 'well above', 'no verdict']} />
 
   return (
     <div className={m.mock ? 'app has-banner' : 'app'}>
@@ -384,7 +383,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
           {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel} unit={unit}
             focus={focus} focusLabel={focusLabel} focusStatus={monthStatus(m, s.to, s.source)} range={range} rangeNote={rangeNote} rangeSummed={!!series?.bandSummed}
             ytd={ytd} baselineYears={m.baseline_years} sourceLine={sourceLine} sensorsLine={sensorsLine}
-            noVerdictReason={noVerdictReason(m, s.source, s.to)} />}
+            noVerdictReason={noVerdictReason(m, s.source, s.to)?.long} />}
           {ready && s.area && (
             <p>
               <button type="button" className="btn btn-primary"
@@ -410,6 +409,10 @@ function CellDetail({ ym, series, manifest: m, seriesLabel, source }: {
   const sum = compareMonth(m, series, source, ym)
   const [y0, y1] = m.baseline_years
   const status = monthStatus(m, ym, source)
+  const reason = noVerdictReason(m, source, ym)
+  // The years actually compared (a raw sensor's record starts after the baseline does).
+  const used = sum.baseline?.years ?? []
+  const [b0, b1] = used.length ? [Math.min(...used, parseYm(ym).year), Math.max(...used, parseYm(ym).year)] : [y0, y1]
   const lo = series.low?.[i]
   const hi = series.high?.[i]
   const range = source === 'harmonized' && !series.estimate && sourceCode(m, ym) !== 'measured_aqua' && status !== 'partial'
@@ -419,8 +422,9 @@ function CellDetail({ ym, series, manifest: m, seriesLabel, source }: {
   if (status === 'partial') compare = sum.baseline && sum.value !== null
     ? `So far (to ${m.last_day}): ${fmtCount(sum.value)}; the ${y0}–${y1} median for the same days is ${fmtCount(sum.baseline.median)}. `
     : 'Month to date: not comparable with full months yet. '
+  else if (reason) compare = `${reason.long} `
   else if (sum.rank && sum.baseline && sum.value !== null) {
-    compare = `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${diff(sum.value, sum.baseline.median)} against the ${y0}–${y1} median (${fmtCount(sum.baseline.median)})`
+    compare = `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${diff(sum.value, sum.baseline.median)} against the ${b0}–${b1} median (${fmtCount(sum.baseline.median)})`
       + `${sum.percentile !== null ? `, ${ordinal(Math.round(sum.percentile))} percentile` : ''}${sum.z !== null ? `, robust z ${sum.z.toFixed(1)}` : ''}. `
   }
   const from = source === 'harmonized' ? ` Source: ${sourceOf(m, ym)}.` : ''

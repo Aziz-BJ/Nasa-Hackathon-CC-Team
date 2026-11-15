@@ -9,9 +9,9 @@ export function DetectionsLegend({ selection, state, loading, error }: {
 }) {
   const title = 'Detections at native pixel size (raw, not harmonized)'
   return (
-    <div className="legend-detections" aria-live="polite">
+    <div className="legend-detections">
       <div className="small">{title}</div>
-      {error ? <span className="small error">{error}</span>
+      {error ? <span className="small error" role="alert">{error}</span>
         : loading || !selection ? <span className="small muted">Loading detections…</span>
         : <>
           <ul aria-label={title}>
@@ -23,9 +23,9 @@ export function DetectionsLegend({ selection, state, loading, error }: {
             ))}
           </ul>
           {selection.drawn < selection.selected && (
-            <div className="small muted">Showing {fmt(selection.drawn)} of {fmt(selection.selected)}, evenly thinned for speed. Choose fewer months or a smaller area to see all.</div>
+            <div className="small muted det-note">Showing {fmt(selection.drawn)} of {fmt(selection.selected)}, evenly thinned for speed. Choose fewer months or a smaller area to see all.</div>
           )}
-          <div className="small muted">Counts are not comparable between sensors: VIIRS sees many more, smaller fires. Positions are pixel centres.</div>
+          <div className="small muted det-note">Counts are not comparable between sensors: VIIRS sees many more, smaller fires. Positions are pixel centres.</div>
         </>}
     </div>
   )

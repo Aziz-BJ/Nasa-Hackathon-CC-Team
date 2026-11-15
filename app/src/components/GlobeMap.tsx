@@ -69,7 +69,7 @@ export const MAP_STYLE: StyleSpecification = {
 const DETECTION_COLOR: ExpressionSpecification = ['match', ['get', 's'], 0, '#E69F00', 1, '#56B4E9', '#009E73']
 const MIN_RADIUS: ExpressionSpecification = ['case', ['==', ['get', 's'], 0], 2.4, 1.5]
 const DETECTION_RADIUS = ['interpolate', ['exponential', 2], ['zoom'],
-  ...[1, 4, 6, 8, 10, 12, 14, 16].flatMap((z) => [z, ['max', MIN_RADIUS, ['*', ['get', 'k'], 2 ** z]]]),
+  ...[1, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22].flatMap((z) => [z, ['max', MIN_RADIUS, ['*', ['get', 'k'], 2 ** z]]]),
 ] as unknown as ExpressionSpecification
 
 const TOOL_LABEL: Record<Exclude<DrawTool, 'pan'>, string> = {
