@@ -5888,3 +5888,16 @@ git commit -m "docs: demo README, data contract, references and AI-use log"
 | One final pre-submission audit of claims, copy and limits | **Fable 5.2** (optional) | The most capable model ($8 / $40), worth one careful pass on wording that judges will read. |
 | Sunday afternoon bug fixes under time pressure | **Opus 5.5 with /fast** | Up to 2.5× faster output at 2× price. Worth it when minutes matter. |
 | The harmonization method itself | **No model** | Space Apps rules: AI must not come up with the solution idea. Pierre and Andre own it. |
+
+---
+
+## 7. Changes after Checkpoint 3 (Sunday 15 Nov, from Aziz's review)
+
+From here on `demo/` is the reference for these parts (the scratch copy the plan's code blocks were generated from was cleared overnight). Checkpoint 4 and Task 23 were applied straight from the code blocks above.
+
+- **Credits:** the bottom strip no longer carries the credit line. Full credits and the "not an official warning service" notice are in About ("Data and credits"). The map keeps MapLibre's compact credit button (open at first, folds to an "i" once the map is used) with "Data: NASA FIRMS", NASA GIBS and OpenStreetMap credits. The guide's first step says it is not a warning service.
+- **Dates:** `MonthRangeSlider` (new, with tests): a bar from the first to the last month, coloured by the area's monthly hotspots, with two draggable handles (keyboard: arrows = 1 month, Page Up/Down = 1 year, Home/End). Manual month/year entry sits behind a pencil button; the quick ranges stay.
+- **Downloads ("download analytics and visualizations", essential per the challenge):** CSV from the Download box and from More info ("Download CSV of these months"); every chart has "Download image (SVG)" (`src/lib/download.ts`, with a test).
+- **Fix:** map controls sit above the bottom strip (`.map-full .maplibregl-ctrl-bottom-right`, more specific than MapLibre's own stylesheet).
+- **Tests now:** `npm test` 74 pass; `npm run test:e2e` 25 pass (1 skipped: drawing on the phone profile).
+- **Open:** a CSV of individual hotspot points (not just monthly counts per area) needs point data from the pipeline (HANDOVER F6 stretch); ask Andre.
