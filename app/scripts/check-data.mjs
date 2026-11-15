@@ -26,7 +26,7 @@ try {
   process.exit(1)
 }
 if (manifest.mock === true && !allowMock) {
-  console.error(`Build stopped: dataset "${dataset}" is MOCK DATA. Set VITE_DATASET to the real dataset, or set ALLOW_MOCK=1 for a labelled demo.`)
+  console.error(`Build stopped: dataset "${dataset}" is MOCK DATA. Set VITE_DATASET to the real dataset, or set ALLOW_MOCK=1 for a labelled test build.`)
   process.exit(1)
 }
-console.log(`Data check passed: "${dataset}" (${manifest.mock ? 'mock, demo build with banner' : 'real data'}).`)
+console.log(`Data check passed: "${dataset}" (${manifest.mock ? 'mock, test build with banner' : 'real data'}).`)

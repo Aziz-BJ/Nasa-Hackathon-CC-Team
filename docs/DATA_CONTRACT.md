@@ -1,9 +1,9 @@
 # Data contract: pipeline → Hotspot Calendar app (version 2)
 
-What the app reads from `demo/public/data/<name>/`. Since 15 Nov 2026 it is written by the importer, not by hand:
+What the app reads from `app/public/data/<name>/`. Since 15 Nov 2026 it is written by the importer, not by hand:
 
 ```bash
-cd demo
+cd app
 npm run import-data -- --cells <path to Andrea's cell_days.csv>
 #   --pipeline <folder>   Pierre's outputs (default ../pipeline/harmonized_outputs_REAL)
 #   --outlines <geojson>  region outlines (default ../pipeline/region_outlines/region_outlines_all_four_regions.geojson)
@@ -109,5 +109,5 @@ part of it. The app says so and shows no 90% range for drawn shapes.
 - Only the last month may be partial, and it is compared with the same days of earlier years (`regions.json` `mtd`), never with whole months.
 - A production build refuses a dataset with `mock: true` (`scripts/check-data.mjs`).
 
-The app's TypeScript types for all of this are in [`demo/src/lib/types.ts`](../demo/src/lib/types.ts).
-Version 1 (10° tiles of a global grid, written by `write_app_data.py`) was used by the mock-data demo before the real data arrived; it is retired.
+The app's TypeScript types for all of this are in [`app/src/lib/types.ts`](../app/src/lib/types.ts).
+Version 1 (10° tiles of a global grid, written by `write_app_data.py`) was used by the first prototype, on mock data, before the real data arrived; it is retired.

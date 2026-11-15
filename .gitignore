@@ -168,7 +168,6 @@ __pycache__/
 .env*
 !.env.example
 
-# Demo app (generated)
-demo/public/data/_mock/
-demo/test-results/
-demo/playwright-report/
+# Web app (generated)
+app/test-results/
+app/playwright-report/
