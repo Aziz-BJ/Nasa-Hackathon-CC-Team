@@ -43,7 +43,7 @@ export interface DetectionsFileOut {
   /** scan / track in units of 10 m (km x 100). */
   w: number[]
   h: number[]
-  /** Fire radiative power, MW, rounded. */
+  /** Fire radiative power in units of 0.1 MW (MW x 10), rounded: small VIIRS fires are often under 2 MW. */
   p: number[]
   /** UTC acquisition time in minutes from 00:00 UTC of the local solar date (can be negative). */
   t: number[]
@@ -104,7 +104,7 @@ export function encodeRegionYear(region: string, year: number, rows: DetectionRo
     y: Math.round((r.latitude - lat0) * 1e4),
     w: Math.round(r.scan * 100),
     h: Math.round(r.track * 100),
-    p: Math.round(r.frp),
+    p: Math.round(r.frp * 10),
     t: utcMinutes(r.date_local, r.acq_date, r.acq_time),
     c: confidenceCode(r.satellite, r.confidence),
     q: r.data_version === 'NRT' ? 1 : 0,

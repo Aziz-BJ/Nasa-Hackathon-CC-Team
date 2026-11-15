@@ -148,7 +148,7 @@ export interface ReportedFile {
 /**
  * Raw cleaned detections of one region-year at native pixel size (detections/<region>/<year>.json).
  * Parallel arrays: s = satellite index * 2 + 1 at night (AQUA 0/1, SNPP 2/3, NOAA20 4/5); d = day of year (0 = 1 January)
- * from date_local; x, y = offsets from lon0 / lat0 in 1e-4 degrees; w, h = scan / track in 10 m units; p = FRP in MW.
+ * from date_local; x, y = offsets from lon0 / lat0 in 1e-4 degrees; w, h = scan / track in 10 m units; p = FRP in 0.1 MW units.
  */
 export interface DetectionsFile {
   region: string
@@ -172,7 +172,8 @@ export interface DetectionsFile {
 
 /** detections/index.json: the years available per region, with counts per satellite [AQUA, SNPP, NOAA20]. */
 export interface DetectionsIndex {
-  schema_version: 1
+  /** 2 since FRP is stored in 0.1 MW (1 stored whole MW). */
+  schema_version: 2
   last_day: string
   satellites: string[]
   regions: Record<string, Record<string, [number, number, number]>>

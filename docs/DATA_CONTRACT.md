@@ -125,7 +125,7 @@ rewrites the folder. On the 15 Nov run: 1,631,147 rows read, 25 dated 14 Nov 202
 `detections/index.json`:
 
 ```json
-{ "schema_version": 1, "last_day": "2026-11-13", "satellites": ["AQUA", "SNPP", "NOAA20"],
+{ "schema_version": 2, "last_day": "2026-11-13", "satellites": ["AQUA", "SNPP", "NOAA20"],
   "regions": { "sicily": { "2021": [1026, 5195, 5404] } } }
 ```
 
@@ -141,7 +141,7 @@ rewrites the folder. On the 15 Nov run: 1,631,147 rows read, 25 dated 14 Nov 202
 | `d` | day of the year from `date_local`, 0 = 1 January |
 | `x`, `y` | offsets from `lon0` / `lat0` in 1e-4 degrees (about 10 m), so longitude = `lon0 + x / 1e4` |
 | `w`, `h` | FIRMS `scan` and `track` pixel sizes in units of 10 m (km × 100) |
-| `p` | fire radiative power, MW, rounded |
+| `p` | fire radiative power in 0.1 MW units (MW × 10), rounded; schema_version 1 stored whole MW |
 | `t` | FIRMS acquisition time (UTC) in minutes from 00:00 UTC of the local solar date; negative when the pass was on the UTC day before |
 | `c` | FIRMS confidence: MODIS 0-100 (%); VIIRS 1 low, 2 nominal, 3 high (low is removed by the cleaning) |
 | `q` | 1 = near real-time (NRT, provisional), 0 = standard processing (SP) |

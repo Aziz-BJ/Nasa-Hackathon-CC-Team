@@ -138,7 +138,7 @@ export function hotspotsCsv(m: Manifest, files: DetectionsFile[], area: Area, fr
     lines.push([
       lat.toFixed(4), lon.toFixed(4), isoDay(utc), pad(time.getUTCHours()) + pad(time.getUTCMinutes()), isoDay(local),
       SAT_NAMES[sat], sat === 0 ? 'MODIS' : 'VIIRS', f.s[i] & 1 ? 'N' : 'D',
-      sat === 0 ? String(f.c[i]) : VIIRS_CONF[f.c[i]] ?? '', String(f.p[i]), (f.w[i] / 100).toFixed(2), (f.h[i] / 100).toFixed(2),
+      sat === 0 ? String(f.c[i]) : VIIRS_CONF[f.c[i]] ?? '', (f.p[i] / 10).toFixed(1), (f.w[i] / 100).toFixed(2), (f.h[i] / 100).toFixed(2),
       f.q[i] ? 'NRT' : 'SP', PRODUCTS[sat], DOIS[sat][f.q[i] ? 1 : 0], f.region,
     ].join(','))
   })
@@ -157,7 +157,7 @@ export function hotspotsCsv(m: Manifest, files: DetectionsFile[], area: Area, fr
     '# doi: the product each row comes from. Standard: MYD14 C6.1, VNP14IMG v2, VJ114IMG v2 (swath products behind the FIRMS archive); near real-time: MCD14DL C6.1, VNP14IMGT, VJ114IMGT (FIRMS NRT).',
     '# Cleaning (pipeline v1.1): duplicates removed; detections FIRMS flags as volcanoes, static land sources or offshore removed, plus Etna and Stromboli and everything within 1 km of 1,311 recurring heat sources;'
       + ' MODIS confidence below 30% and VIIRS low confidence removed; repeat detections of the same fire from overlapping pixels or orbits removed.',
-    '# Positions are rounded to 0.0001 degrees (about 10 m), FRP to 1 MW, scan and track (pixel size along scan and track, km) to 10 m.',
+    '# Positions are rounded to 0.0001 degrees (about 10 m), FRP to 0.1 MW, scan and track (pixel size along scan and track, km) to 10 m.',
     '# A hotspot is a thermal anomaly in a satellite pixel, not a confirmed fire, and not burned area. Zero detections is not "no fire" (cloud, smoke, gaps between passes). Not for tactical decisions during a fire.',
     "# We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science Data and Information System (ESDIS).",
     '# FIRMS data are provided "as is", without warranty of any kind.',

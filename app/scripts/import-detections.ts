@@ -36,8 +36,8 @@ if (!/detections\/?$/.test(out)) {
   process.exit(1)
 }
 rmSync(out, { recursive: true, force: true })
-const index: { schema_version: 1; last_day: string; satellites: readonly string[]; regions: Record<string, Record<string, [number, number, number]>> } = {
-  schema_version: 1, last_day: manifest.last_day, satellites: SATELLITES, regions: {},
+const index: { schema_version: 2; last_day: string; satellites: readonly string[]; regions: Record<string, Record<string, [number, number, number]>> } = {
+  schema_version: 2, last_day: manifest.last_day, satellites: SATELLITES, regions: {},
 }
 const totals: [number, number, number] = [0, 0, 0]
 for (const [region, byYear] of [...groupRows(rows)].sort(([a], [b]) => a.localeCompare(b))) {

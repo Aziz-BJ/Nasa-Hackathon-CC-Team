@@ -16,7 +16,7 @@ const FILE: DetectionsFile = {
   y: [5000, 5000, 15000, 15000, 5000],
   w: [100, 100, 39, 39, 39],
   h: [100, 100, 36, 36, 36],
-  p: [20, 5, 3, 2, 1],
+  p: [200, 50, 30, 20, 4], // 0.1 MW units: 20 MW ... 0.4 MW
   t: [12 * 60 + 30, -60, 13 * 60, 60, 0], // the 2nd was seen at 23:00 UTC the day before
   c: [80, 45, 2, 3, 2],
   q: [0, 0, 0, 0, 1],
@@ -92,7 +92,7 @@ describe('hotspotsCsv', () => {
     expect([col(aquaNight, 'satellite'), col(aquaNight, 'instrument'), col(aquaNight, 'daynight'), col(aquaNight, 'confidence')]).toEqual(['Aqua', 'MODIS', 'N', '45'])
     expect([col(noaa, 'satellite'), col(noaa, 'confidence'), col(noaa, 'data_version'), col(noaa, 'local_solar_date')]).toEqual(['NOAA-20', 'n', 'NRT', '2020-12-31'])
     expect([col(aquaDay, 'doi'), col(noaa, 'doi')]).toEqual(['10.5067/MODIS/MYD14.061', '10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002'])
-    expect([col(noaa, 'frp_mw'), col(noaa, 'scan_km'), col(noaa, 'track_km')]).toEqual(['1', '0.39', '0.36'])
+    expect([col(noaa, 'frp_mw'), col(noaa, 'scan_km'), col(noaa, 'track_km')]).toEqual(['0.4', '0.39', '0.36'])
   })
   it('says what the rows are and credits FIRMS in the header', () => {
     expect(out.csv).toMatch(/NOT harmonized/)

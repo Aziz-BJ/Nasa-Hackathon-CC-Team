@@ -51,7 +51,7 @@ describe('encodeRegionYear', () => {
     const lat = f.lat0 + f.y[2] / 1e4
     expect(Math.abs(lon - 13.7654321)).toBeLessThan(5e-5)
     expect(Math.abs(lat - 38.1234567)).toBeLessThan(5e-5)
-    expect([f.w[2], f.h[2], f.p[2]]).toEqual([120, 110, 30])
+    expect([f.w[2], f.h[2], f.p[2], f.p[0]]).toEqual([120, 110, 304, 46]) // FRP in 0.1 MW
     // 01:05 UTC on the day before the local date (a night pass west of Greenwich would do this).
     expect([f.t[2], f.c[2], f.q[2]]).toEqual([-1440 + 65, 67, 1])
     expect([f.t[0], f.c[0], f.q[0]]).toEqual([12 * 60 + 18, 2, 0])
