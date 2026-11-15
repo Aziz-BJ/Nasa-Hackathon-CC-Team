@@ -2,7 +2,7 @@
 // Map-first layout: the globe fills the screen; feature boxes around it open side drawers;
 // the bottom strip holds the legend, a one-line verdict and "More info".
 import { CalendarBlank, ChartLine, DownloadSimple, FireSimple, Info, MapPin, Planet, Stack, Table } from '@phosphor-icons/react'
-import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react'
 import { AboutPage } from './components/AboutPage'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
@@ -122,18 +122,26 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
     return applyUrl(mm, outlines, parseHash(window.location.hash), { ...init, area: first })
   })
   // Keep the link shareable, and follow links pasted into the same tab.
-  useEffect(() => { window.history.replaceState(null, '', toHash(s)) }, [s])
+  const hashRef = useRef('')
+  useEffect(() => {
+    hashRef.current = toHash(s)
+    window.history.replaceState(null, '', hashRef.current)
+  }, [s])
   useEffect(() => {
     const onHash = () => {
       const url = parseHash(window.location.hash)
-      if (!isEmptyUrl(url)) dispatch({ type: 'applyUrl', manifest: m, outlines, url })
+      // A hash a link cannot carry (the skip link's #main, or a refused area) changes nothing, and the address bar goes
+      // back to the current view so it can still be shared and reloaded.
+      if (isEmptyUrl(url)) window.history.replaceState(null, '', hashRef.current)
+      else dispatch({ type: 'applyUrl', manifest: m, outlines, url })
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
   }, [m, outlines])
 
   // Outlines can arrive after the first screen: redraw the chosen region from its outline instead of its box.
-  const boxedRegion = s.area?.regionKey && s.area.geometry.type === 'Polygon' ? s.area.regionKey : null
+  // Not while drawing: setArea ends the drawing. The outline is applied once the drawing is finished or cancelled.
+  const boxedRegion = s.area?.regionKey && s.area.geometry.type === 'Polygon' && s.tool === 'pan' ? s.area.regionKey : null
   useEffect(() => {
     if (!outlines || !boxedRegion) return
     const area = areaFromRegion(m, outlines, boxedRegion)
