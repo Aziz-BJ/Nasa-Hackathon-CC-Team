@@ -16,9 +16,11 @@ describe('TimeRangePicker', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Last 12 months' }))
     expect(onChange).toHaveBeenCalledWith('2025-12', '2026-11')
   })
-  it('changes the start year and clamps to the data', async () => {
+  it('changes the start year by hand and clamps to the data', async () => {
     const onChange = vi.fn()
     render(<TimeRangePicker {...props} onChange={onChange} />)
+    expect(screen.queryByLabelText('From year')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'Enter dates manually' }))
     await userEvent.selectOptions(screen.getByLabelText('From year'), '2019')
     expect(onChange).toHaveBeenCalledWith('2019-11', '2026-11')
     await userEvent.selectOptions(screen.getByLabelText('To month'), '12')

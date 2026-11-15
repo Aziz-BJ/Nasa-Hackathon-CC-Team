@@ -30,9 +30,11 @@ import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale, fmtCount } from './lib/colorScale'
+import { buildCsv, csvFilename } from './lib/csv'
+import { saveFile } from './lib/download'
 import { calendarMedians, summarizeMonth, VERDICT_LABELS, yearToDate } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
-import { labelYm, longLabelYm, parseYm, type YearMonth } from './lib/months'
+import { labelYm, longLabelYm, monthRange, parseYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
 import { SERIES_LABELS, type Manifest, type SeriesKey } from './lib/types'
 import { initialState, quickRanges, reducer, type AppState } from './state/appState'
@@ -102,6 +104,12 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     const scale = buildCountScale(totals.map((t) => t.total), { ...RAMP, palette: s.palette })
     return { cells: cellsToFeatures(totals, m.grid_deg, scale), mapScale: scale }
   }, [data.selection, s.source, i0, i1, s.palette, m.grid_deg])
+  // The area's hotspots per month, aligned to the months the date bar covers.
+  const activity = useMemo(() => {
+    if (!series) return undefined
+    const at = new Map(series.months.map((ym, i) => [ym, values[i]]))
+    return monthRange(m.harmonized_coverage[0], m.last_month).map((ym) => at.get(ym) ?? null)
+  }, [series, values, m.harmonized_coverage, m.last_month])
   const overviewFc = useMemo(() => (overview ? overviewToFeatures(overview, s.palette) : EMPTY_FC), [overview, s.palette])
 
   const focus = series ? summarizeMonth(values, series.months, s.to, m.baseline_years) : null
@@ -128,7 +136,8 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     { id: 'dates', side: 'left', label: 'Dates', icon: <CalendarBlank aria-hidden />, title: 'Choose months',
       guide: 'Choose the months to look at. Colours rescale to the months you pick.',
       body: () => <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
-        quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })} /> },
+        quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })}
+        activity={activity} palette={s.palette} /> },
     { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
       guide: 'Switch between the harmonized record and raw MODIS or VIIRS, and change colours, imagery and labels.',
       body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
@@ -203,7 +212,7 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
   }
 
   const guideSteps: GuideStep[] = [
-    { target: null, title: 'Welcome', text: 'This globe shows where satellites detected fire hotspots, from 2000 to now. Colours show how many, for the area and months you choose.' },
+    { target: null, title: 'Welcome', text: 'This globe shows where satellites detected fire hotspots, from 2000 to now. Colours show how many, for the area and months you choose. It is a record of satellite detections, not a warning service.' },
     ...panels.map((p) => ({ target: `box-${p.id}`, title: p.label, text: p.guide })),
     { target: 'strip', title: 'Legend and summary', text: 'What the colours mean. Press More info for the verdict: is the latest month unusual for this area?' },
     { target: 'guide', title: 'Guide', text: 'Open this guide again any time.' },
@@ -252,6 +261,14 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
         more={<>
           {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel}
             focus={focus} focusStatus={monthStatus(m, s.to, s.source)} ytd={ytd} baselineYears={m.baseline_years} sensorsLine={sensorsLine} />}
+          {ready && s.area && (
+            <p>
+              <button type="button" className="btn btn-primary"
+                onClick={() => saveFile(csvFilename(s.area!, s.from, s.to), buildCsv(m, s.area!, series, i0, i1), 'text/csv;charset=utf-8')}>
+                <DownloadSimple aria-hidden /> Download CSV of these months
+              </button>
+            </p>
+          )}
           <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
           <p className="small muted">Colours show satellite hotspot detections, not fires or burned area. They are rebuilt for the months you choose, so the full ramp is always used.</p>
         </>} />

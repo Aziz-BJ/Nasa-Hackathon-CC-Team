@@ -1,7 +1,11 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-import { useId } from 'react'
-import { formatYm, MONTH_LONG, parseYm, type YearMonth } from '../lib/months'
+import { PencilSimple } from '@phosphor-icons/react'
+import { useId, useMemo, useState } from 'react'
+import { RAMP } from '../config'
+import { buildCountScale, type PaletteId } from '../lib/colorScale'
+import { formatYm, labelYm, MONTH_LONG, monthsBetween, parseYm, type YearMonth } from '../lib/months'
 import type { QuickRange } from '../state/appState'
+import { MonthRangeSlider } from './MonthRangeSlider'
 
 export interface TimeRangePickerProps {
   first: YearMonth
@@ -10,6 +14,9 @@ export interface TimeRangePickerProps {
   to: YearMonth
   quick: QuickRange[]
   onChange: (from: YearMonth, to: YearMonth) => void
+  /** Hotspots per month for the chosen area, from \`first\` to \`last\`, drawn as the bar's colours. */
+  activity?: (number | null)[]
+  palette?: PaletteId
 }
 
 function MonthSelect({ label, value, first, last, onChange }: {
@@ -37,13 +44,33 @@ function MonthSelect({ label, value, first, last, onChange }: {
   )
 }
 
-export function TimeRangePicker({ first, last, from, to, quick, onChange }: TimeRangePickerProps) {
+export function TimeRangePicker({ first, last, from, to, quick, onChange, activity, palette = 'inferno' }: TimeRangePickerProps) {
+  const [manual, setManual] = useState(false)
+  const colors = useMemo(() => {
+    if (!activity) return undefined
+    const scale = buildCountScale(activity, { ...RAMP, palette })
+    return activity.map((v) => scale.colorOf(v))
+  }, [activity, palette])
+  const count = monthsBetween(from, to) + 1
   return (
-    <div>
-      <div className="row">
-        <MonthSelect label="From" value={from} first={first} last={last} onChange={(ym) => onChange(ym, to)} />
-        <MonthSelect label="To" value={to} first={first} last={last} onChange={(ym) => onChange(from, ym)} />
+    <div className="range-picker">
+      <div className="range-head">
+        <div>
+          <div className="range-value">{labelYm(from)} – {labelYm(to)}</div>
+          <div className="small muted">{count} {count === 1 ? 'month' : 'months'}</div>
+        </div>
+        <button type="button" className="round-btn small-round" aria-expanded={manual} aria-controls={manual ? 'manual-dates' : undefined}
+          aria-label="Enter dates manually" title="Enter dates manually" onClick={() => setManual((x) => !x)}>
+          <PencilSimple weight="bold" aria-hidden />
+        </button>
       </div>
+      <MonthRangeSlider first={first} last={last} from={from} to={to} colors={colors} onChange={onChange} />
+      {manual && (
+        <div className="row" id="manual-dates">
+          <MonthSelect label="From" value={from} first={first} last={last} onChange={(ym) => onChange(ym, to)} />
+          <MonthSelect label="To" value={to} first={first} last={last} onChange={(ym) => onChange(from, ym)} />
+        </div>
+      )}
       <div className="chips" aria-label="Quick ranges">
         {quick.map((q) => (
           <button key={q.label} type="button" className="btn" aria-pressed={q.from === from && q.to === to} onClick={() => onChange(q.from, q.to)}>
@@ -51,7 +78,7 @@ export function TimeRangePicker({ first, last, from, to, quick, onChange }: Time
           </button>
         ))}
       </div>
-      <p className="small muted">All months are UTC. Colours rescale to the months you choose.</p>
+      <p className="small muted">Drag the handles or use the arrow keys. The bar shows hotspots per month for this area. All months are UTC; colours rescale to the months you choose.</p>
     </div>
   )
 }

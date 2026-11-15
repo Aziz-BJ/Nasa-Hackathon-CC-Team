@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { AreaSeries } from '../lib/aggregate'
 import type { Area } from '../lib/area'
 import { buildCsv, csvFilename } from '../lib/csv'
+import { saveFile } from '../lib/download'
 import type { Manifest } from '../lib/types'
 
 export function ExportButton({ manifest, area, series, i0, i1 }: {
@@ -11,15 +12,7 @@ export function ExportButton({ manifest, area, series, i0, i1 }: {
 }) {
   const [copied, setCopied] = useState(false)
   function download() {
-    const csv = buildCsv(manifest, area, series, i0, i1)
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = csvFilename(area, series.months[i0], series.months[i1])
-    document.body.append(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+    saveFile(csvFilename(area, series.months[i0], series.months[i1]), buildCsv(manifest, area, series, i0, i1), 'text/csv;charset=utf-8')
   }
   async function copyLink() {
     try {
@@ -32,7 +25,8 @@ export function ExportButton({ manifest, area, series, i0, i1 }: {
   return (
     <div>
       <p>Monthly hotspot counts for this area and these months ({series.months[i0]} to {series.months[i1]}), with every sensor, the data status and a provenance header.</p>
-      <button type="button" className="btn" onClick={download}><DownloadSimple aria-hidden /> Download CSV</button>
+      <button type="button" className="btn btn-primary" onClick={download}><DownloadSimple aria-hidden /> Download CSV</button>
+      <p className="small muted" style={{ marginTop: '0.75rem' }}>Every chart (Trends, Sensors, Reported) also has a "Download image" button.</p>
       <h3 style={{ marginTop: '1.25rem' }}>Share this view</h3>
       <p className="small">The link keeps the area, months and data source.</p>
       <label className="small">Link<input type="text" readOnly value={window.location.href} onFocus={(e) => e.target.select()} style={{ width: '100%' }} /></label>

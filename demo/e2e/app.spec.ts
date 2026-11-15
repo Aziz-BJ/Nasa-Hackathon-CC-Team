@@ -19,7 +19,7 @@ test.describe('app', () => {
 
   test('loads with no login and shows the mock banner on demo builds', async ({ page }) => {
     await expect(page.getByText('MOCK DATA, NOT REAL')).toBeVisible()
-    await expect(page.getByText(/Data: NASA FIRMS/)).toBeVisible()
+    await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText('NASA FIRMS')
   })
 
   test('a preset gives the calendar, verdict and charts', async ({ page }) => {
@@ -109,6 +109,34 @@ test.describe('app', () => {
     await expect(page.getByLabel('MODIS only (raw)')).toBeChecked()
   })
 
+  test('the date bar moves by keyboard, and manual entry is one tap away', async ({ page }) => {
+    await openPanel(page, 'Dates')
+    await page.getByRole('slider', { name: 'Start month' }).focus()
+    await page.keyboard.press('End') // start jumps to the end month
+    await page.keyboard.press('PageDown') // and back one year
+    await expect(selection(page)).toContainText('Oct 2025 – Oct 2026')
+    await page.getByRole('button', { name: 'Enter dates manually' }).click()
+    await expect(page.getByLabel('From year')).toHaveValue('2025')
+  })
+
+  test('downloads: CSV from More info and a chart image', async ({ page }) => {
+    await page.getByRole('button', { name: 'More info' }).click()
+    const [csv] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV of these months' }).click()])
+    expect(readFileSync((await csv.path())!, 'utf8')).toContain('hotspots_harmonized')
+    await page.getByRole('button', { name: 'Less' }).click()
+    await openPanel(page, 'Trends')
+    const [img] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download image (SVG)' }).first().click()])
+    expect(img.suggestedFilename()).toMatch(/\.svg$/)
+    expect(readFileSync((await img.path())!, 'utf8')).toContain('<svg')
+  })
+
+  test('credits live in About, not in the bottom strip', async ({ page }) => {
+    await expect(page.locator('.strip')).not.toContainText('OpenStreetMap')
+    await page.getByRole('button', { name: 'About' }).click()
+    await expect(page.locator('#drawer')).toContainText('© OpenStreetMap contributors')
+    await expect(page.locator('#drawer')).toContainText('not an official warning service')
+  })
+
   test('no automatic accessibility violations', async ({ page }) => {
     const scan = async () => (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => `${v.id}: ${v.help}`)
     expect(await scan()).toEqual([])
@@ -116,6 +144,10 @@ test.describe('app', () => {
     expect(await scan()).toEqual([])
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'More info' }).click()
+    expect(await scan()).toEqual([])
+    await page.getByRole('button', { name: 'Less' }).click()
+    await openPanel(page, 'Dates')
+    await page.getByRole('button', { name: 'Enter dates manually' }).click()
     expect(await scan()).toEqual([])
   })
 })

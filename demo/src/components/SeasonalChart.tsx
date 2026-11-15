@@ -46,7 +46,7 @@ export function SeasonalChart({ months, values, focusYear, baselineYears, series
   return (
     <figure className="card" id="seasons">
       <header><h2>{focusYear} against a typical year</h2></header>
-      <PlotFigure make={make} label={`Line chart of monthly hotspots in ${focusYear} against the ${y0} to ${y1} median and ranges.`} />
+      <PlotFigure make={make} filename={`hotspots-season-${focusYear}.svg`} label={`Line chart of monthly hotspots in ${focusYear} against the ${y0} to ${y1} median and ranges.`} />
       <figcaption className="caption">
         Orange: {focusYear}. Grey: {focusYear - 1}. Dashed white: median of {y0} to {y1} (leaving out {focusYear}).
         Dark band: middle 50% of years. Light band: middle 80% of years. {seriesLabel}.

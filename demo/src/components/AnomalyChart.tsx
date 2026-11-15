@@ -55,7 +55,7 @@ export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabe
           </select>
         </label>
       </header>
-      <PlotFigure make={make} label={`Bar chart of monthly anomalies from ${months[i0]} to ${months[i1]}.`} />
+      <PlotFigure make={make} filename={"hotspots-anomalies.svg"} label={`Bar chart of monthly anomalies from ${months[i0]} to ${months[i1]}.`} />
       <div className="legend" aria-label="Anomaly colours">
         {ANOMALY_COLORS.map((c, i) => <span key={c}><span className="swatch" style={{ background: c }} />{ANOMALY_LABELS[i]}</span>)}
       </div>

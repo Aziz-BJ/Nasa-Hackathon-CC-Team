@@ -67,7 +67,7 @@ export function OverlapChart({ series }: { series: AreaSeries }) {
   return (
     <figure className="card" id="sensors">
       <header><h2>Why harmonize: one record, two instruments</h2></header>
-      <PlotFigure make={make} label="Line chart of yearly hotspot totals for raw MODIS, raw VIIRS, the stitched raw record and the harmonized record." />
+      <PlotFigure make={make} filename={"hotspots-modis-vs-viirs.svg"} label="Line chart of yearly hotspot totals for raw MODIS, raw VIIRS, the stitched raw record and the harmonized record." />
       <div className="legend" aria-label="Lines">
         {Object.entries(STYLE).map(([k, st]) => (
           <span key={k}><span className="swatch" style={{ background: 'none', borderTop: `3px ${st.dash ? 'dashed' : 'solid'} ${st.color}`, height: 0 }} />{st.label}</span>

@@ -94,8 +94,12 @@ export function GlobeMap({ area, cells, overview, tool, basemap, labels, onDrawn
   useEffect(() => {
     let map: MLMap
     try {
-      // Credits are shown in the bottom strip (always visible), so MapLibre's own attribution box is off.
-      map = new MLMap({ container: container.current!, style: structuredClone(MAP_STYLE), center: [10, 15], zoom: 1.4, attributionControl: false })
+      // A compact credit button on the map (shown open at first, folds to an "i" once the map is used).
+      // Full credits and the disclaimer are in About.
+      map = new MLMap({
+        container: container.current!, style: structuredClone(MAP_STYLE), center: [10, 15], zoom: 1.4,
+        attributionControl: { compact: true, customAttribution: 'Data: NASA FIRMS' },
+      })
     } catch (e) {
       setFailed(e instanceof Error ? e.message : String(e))
       return

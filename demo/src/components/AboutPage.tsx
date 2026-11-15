@@ -18,7 +18,15 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
         <a href="https://firms.modaps.eosdis.nasa.gov/map/">NASA FIRMS Fire Map</a>; for official warnings follow your local authorities.
       </div>
 
-      <h2>Data</h2>
+      <h2>Data and credits</h2>
+      <ul>
+        <li>Fire detections: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>, MODIS Collection 6.1 (Terra and Aqua) and VIIRS 375 m (Suomi NPP, NOAA-20).</li>
+        <li>Globe imagery: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a> (Blue Marble, Black Marble).</li>
+        <li>Borders and place names: <a href="https://openfreemap.org">OpenFreeMap</a>, © <a href="https://www.openmaptiles.org/">OpenMapTiles</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.</li>
+        <li>Built for the NASA International Space Apps Challenge 2026. Not an official NASA product, and not an official warning service.</li>
+      </ul>
+
+      <h2>Data products</h2>
       <table>
         <thead><tr><th>Product</th><th>Version</th><th>Source</th><th>Months used</th></tr></thead>
         <tbody>

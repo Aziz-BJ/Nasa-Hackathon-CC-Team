@@ -93,10 +93,15 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 .map-full { position: fixed; inset: var(--banner-h) 0 0 0; z-index: 0; background: #000; }
 .globe { width: 100%; height: 100%; }
 .map-fallback { position: absolute; inset: 30% 20% auto; padding: 1.5rem; border-radius: var(--r-l); background: var(--glass-strong); }
-.maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 10px); right: 2px; }
+/* More specific than MapLibre's own stylesheet (which loads later), so map controls sit above the bottom strip. */
+.map-full .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 14px); right: 2px; }
 .maplibregl-ctrl-group { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border-radius: var(--r-s) !important; box-shadow: var(--shadow) !important; border: 1px solid var(--edge); }
 .maplibregl-ctrl-group button + button { border-top: 1px solid var(--separator) !important; }
 .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }
+/* Map credit button: same glass as the other controls */
+.maplibregl-ctrl-attrib.maplibregl-compact { background: var(--glass) !important; -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); color: var(--label-2); font-size: 0.6875rem; }
+.maplibregl-ctrl-attrib a { color: var(--label); }
+.maplibregl-ctrl-attrib-button { filter: invert(1); }
 
 /* ---------- Top bar ---------- */
 .topbar { position: fixed; top: calc(var(--banner-h) + 10px); left: 10px; right: 10px; z-index: 20; display: flex; align-items: center; gap: 0.6rem; pointer-events: none; }
@@ -152,6 +157,27 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 .card > header label { margin: 0; color: var(--label-2); font-size: 0.8125rem; }
 .card > header label > select { display: inline-block; width: auto; margin: 0 0 0 0.35rem; }
 
+/* ---------- Date range bar ---------- */
+.range-head { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.75rem; }
+.range-value { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; letter-spacing: -0.015em; }
+.small-round { width: 2rem; height: 2rem; box-shadow: none; background: var(--fill); }
+.small-round[aria-expanded='true'] { background: var(--accent-tint); color: var(--accent); }
+.range-slider { padding: 0.35rem 0.6rem 0; }
+.range-track { position: relative; height: 2rem; border-radius: 8px; background: linear-gradient(to right, var(--fill), var(--fill-hover)); touch-action: none; cursor: pointer; box-shadow: inset 0 0 0 1px var(--edge); }
+.range-dim { position: absolute; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.62); pointer-events: none; }
+.range-dim:first-child { border-radius: 8px 0 0 8px; }
+.range-dim:nth-child(2) { border-radius: 0 8px 8px 0; }
+.range-window { position: absolute; top: -3px; bottom: -3px; border: 2px solid var(--label); border-radius: 6px; pointer-events: none; }
+.range-thumb { position: absolute; top: 50%; width: 1.1rem; height: 2.6rem; transform: translate(-50%, -50%); border-radius: 0.55rem; background: var(--label); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); cursor: grab; touch-action: none; }
+.range-thumb::after { content: ''; position: absolute; left: 50%; top: 30%; bottom: 30%; width: 2px; transform: translateX(-50%); border-radius: 1px; background: rgba(0, 0, 0, 0.35); }
+.range-thumb:active { cursor: grabbing; transform: translate(-50%, -50%) scale(1.06); }
+.range-thumb:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.range-ticks { position: relative; height: 1.1rem; margin-top: 0.35rem; font-size: 0.6875rem; color: var(--label-2); font-variant-numeric: tabular-nums; }
+.range-ticks span { position: absolute; transform: translateX(-50%); }
+.range-ticks span:first-child { transform: none; }
+.range-ticks span:last-child { transform: translateX(-100%); }
+.range-picker .chips { margin-top: 0.9rem; }
+
 /* ---------- Bottom strip: legend, one-line verdict, More info ---------- */
 .strip { position: fixed; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 20; width: min(1000px, calc(100vw - 20px)); border-radius: var(--r-l);
   background: var(--glass); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); border: 1px solid var(--edge); box-shadow: var(--shadow); }
@@ -162,8 +188,6 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 .strip-bar { display: flex; gap: 1rem; align-items: center; padding: 0.6rem 0.9rem 0.4rem; flex-wrap: wrap; }
 .strip-legend { flex: 1 1 340px; min-width: 0; }
 .strip-headline { flex: 1 1 240px; font-size: 0.875rem; }
-.strip-credit { margin: 0; padding: 0 0.9rem 0.55rem; font-size: 0.6875rem; color: var(--label-3); letter-spacing: 0.01em; }
-.strip-credit a { color: var(--label-2); text-decoration: underline; text-decoration-color: var(--label-3); }
 
 /* ---------- Legends ---------- */
 .legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: center; font-size: 0.75rem; color: var(--label-2); margin: 0.25rem 0 0.75rem; }
@@ -209,6 +233,7 @@ table.calendar td.total .bar.part { opacity: 0.45; }
 .cell-detail { min-height: 2.6rem; margin-top: 0.6rem; font-size: 0.875rem; }
 
 .figure svg { overflow: visible; }
+.btn-small { font-size: 0.8125rem; padding: 0.3rem 0.65rem; margin-top: 0.35rem; }
 .about { max-width: 52rem; }
 .about table { border-collapse: collapse; font-size: 0.875rem; }
 .about td, .about th { border-bottom: 1px solid var(--separator); padding: 0.4rem 0.6rem 0.4rem 0; text-align: left; }
@@ -226,7 +251,7 @@ table.calendar td.total .bar.part { opacity: 0.45; }
 /* ---------- Phones: one scrolling row of boxes above a compact strip; drawers become sheets ---------- */
 @media (max-width: 760px) {
   :root { --strip-h: 150px; --rail-w: 60px; --top-h: 48px; }
-  .mock-banner .long, .strip-credit .long, .legend-compact > .small { display: none; }
+  .mock-banner .long, .legend-compact > .small { display: none; }
   .search-pill { max-width: none; flex: 1 1 0; }
   .rails { display: flex; gap: 0.5rem; position: fixed; left: 0; right: 0; bottom: calc(var(--strip-h) + 14px); z-index: 15; overflow-x: auto; padding: 4px 10px; }
   .rail { position: static; flex-direction: row; flex: 0 0 auto; }
@@ -240,7 +265,7 @@ table.calendar td.total .bar.part { opacity: 0.45; }
   .strip-more-wrap[data-open='true'] > .strip-more { max-height: 46vh; }
   .drawer, .drawer-wide { left: 10px; right: 10px; width: auto; top: calc(var(--banner-h) + var(--top-h) + 16px); bottom: calc(var(--strip-h) + 92px); }
   .drawer-left[data-open='false'], .drawer-right[data-open='false'] { transform: translateY(24px) scale(0.98); }
-  .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 92px); }
+  .map-full .maplibregl-ctrl-bottom-right { bottom: calc(var(--strip-h) + 92px); }
 }
 
 /* ---------- Accessibility preferences ---------- */

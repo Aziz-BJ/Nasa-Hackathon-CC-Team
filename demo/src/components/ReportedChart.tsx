@@ -45,7 +45,7 @@ export function ReportedChart({ reported, months, detected, from, to }: Reported
   return (
     <figure className="card" id="reported">
       <header><h2>Fires detected and fires reported</h2></header>
-      <PlotFigure make={make} label="Two line charts: satellite hotspot detections and fires reported on the ground, by month." />
+      <PlotFigure make={make} filename={"hotspots-detected-vs-reported.svg"} label="Two line charts: satellite hotspot detections and fires reported on the ground, by month." />
       <figcaption className="caption">
         Top and bottom use different units and scales. Ground reports count incidents attended; satellites count hot pixels.
         They are not expected to match, but busy seasons should line up. Source: {reported.source} ({reported.licence}). <a href={reported.url}>Data page</a>.
