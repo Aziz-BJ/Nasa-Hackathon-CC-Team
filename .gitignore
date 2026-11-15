@@ -167,3 +167,8 @@ __pycache__/
 # Secrets (FIRMS MAP_KEY must never be committed)
 .env*
 !.env.example
+
+# Demo app (generated)
+demo/public/data/_mock/
+demo/test-results/
+demo/playwright-report/

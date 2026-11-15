@@ -1,0 +1,129 @@
+satellite,date,source
+AQUA,2002-07-30,FIRMS missing-data list
+AQUA,2002-07-31,FIRMS missing-data list
+AQUA,2002-08-01,FIRMS missing-data list
+AQUA,2002-08-02,FIRMS missing-data list
+AQUA,2002-08-03,FIRMS missing-data list
+AQUA,2002-08-04,FIRMS missing-data list
+AQUA,2002-08-05,FIRMS missing-data list
+AQUA,2002-08-06,FIRMS missing-data list
+AQUA,2002-08-07,FIRMS missing-data list
+AQUA,2002-09-13,FIRMS missing-data list
+AQUA,2020-08-16,"data: no Aqua points all day (S-NPP 805, Terra 131)"
+AQUA,2020-08-17,data: 0 AQUA points in CA D while SNPP/TERRA >=100
+AQUA,2020-08-18,data: 0 AQUA points in CA D while SNPP/TERRA >=100
+AQUA,2020-08-19,data: 0 AQUA points in CA N while SNPP/TERRA >=100
+AQUA,2020-08-20,data: 0 AQUA points in CA N while SNPP/TERRA >=100
+AQUA,2020-08-21,data: 0 AQUA points in CA D while SNPP/TERRA >=100
+AQUA,2020-08-27,data: 0 AQUA points in CA N while SNPP/TERRA >=100
+AQUA,2020-09-01,data: 0 AQUA points in CA N while SNPP/TERRA >=100
+AQUA,2021-09-24,data: 0 AQUA points in CA N while SNPP/TERRA >=100
+AQUA,2022-04-01,FIRMS missing-data list
+AQUA,2022-04-02,FIRMS missing-data list
+AQUA,2022-04-03,FIRMS missing-data list
+AQUA,2022-04-04,FIRMS missing-data list
+AQUA,2022-04-05,FIRMS missing-data list
+AQUA,2022-04-06,FIRMS missing-data list
+AQUA,2022-04-07,FIRMS missing-data list
+AQUA,2022-04-08,FIRMS missing-data list
+AQUA,2022-04-09,FIRMS missing-data list
+AQUA,2022-04-10,FIRMS missing-data list
+AQUA,2022-04-11,FIRMS missing-data list
+AQUA,2022-04-12,FIRMS missing-data list
+AQUA,2022-04-13,FIRMS missing-data list
+AQUA,2022-04-14,FIRMS missing-data list
+AQUA,2022-04-15,FIRMS missing-data list
+AQUA,2022-04-16,FIRMS missing-data list
+NOAA20,2018-07-19,data: 0 NOAA20 points in CA N while SNPP >=100
+NOAA20,2023-07-19,FIRMS missing-data list
+NOAA20,2023-07-20,FIRMS missing-data list
+NOAA20,2023-07-21,FIRMS missing-data list
+NOAA20,2023-07-22,FIRMS missing-data list
+NOAA20,2023-09-30,FIRMS missing-data list
+NOAA20,2024-02-04,FIRMS missing-data list
+NOAA20,2026-10-27,data: 0 NOAA20 points in CA D while SNPP >=100
+SNPP,2012-03-24,data: 0 SNPP points in IT D while AQUA >=100
+SNPP,2012-03-25,FIRMS missing-data list
+SNPP,2012-03-26,data: 0 SNPP points in IT D while AQUA >=100
+SNPP,2021-08-03,data: 0 SNPP points in CA D while NOAA20/AQUA >=100
+SNPP,2021-08-04,data: 0 SNPP points in CA N while NOAA20/AQUA >=100
+SNPP,2022-07-27,FIRMS missing-data list
+SNPP,2022-07-28,FIRMS missing-data list
+SNPP,2022-07-29,FIRMS missing-data list
+SNPP,2022-07-30,FIRMS missing-data list
+SNPP,2022-07-31,FIRMS missing-data list
+SNPP,2022-08-01,FIRMS missing-data list
+SNPP,2022-08-02,FIRMS missing-data list
+SNPP,2022-08-03,FIRMS missing-data list
+SNPP,2022-08-04,FIRMS missing-data list
+SNPP,2022-08-05,FIRMS missing-data list
+SNPP,2022-08-06,FIRMS missing-data list
+SNPP,2022-08-07,FIRMS missing-data list
+SNPP,2022-08-08,FIRMS missing-data list
+SNPP,2022-08-09,FIRMS missing-data list
+SNPP,2022-08-10,FIRMS missing-data list
+SNPP,2024-05-30,FIRMS missing-data list
+SNPP,2024-05-31,FIRMS missing-data list
+SNPP,2024-06-01,FIRMS missing-data list
+SNPP,2024-06-02,FIRMS missing-data list
+SNPP,2024-06-03,FIRMS missing-data list
+SNPP,2024-07-10,FIRMS missing-data list
+SNPP,2024-07-11,FIRMS missing-data list
+SNPP,2024-07-12,FIRMS missing-data list
+SNPP,2024-07-13,FIRMS missing-data list
+SNPP,2024-07-14,FIRMS missing-data list
+SNPP,2024-07-15,FIRMS missing-data list
+SNPP,2024-07-25,FIRMS missing-data list
+SNPP,2024-07-26,FIRMS missing-data list
+SNPP,2024-07-27,FIRMS missing-data list
+SNPP,2024-07-28,FIRMS missing-data list
+SNPP,2024-09-26,FIRMS missing-data list
+SNPP,2024-11-03,FIRMS missing-data list
+SNPP,2024-11-04,FIRMS missing-data list
+SNPP,2024-11-05,FIRMS missing-data list
+SNPP,2025-07-06,"data: no S-NPP points all day, NOAA-20 >=100"
+SNPP,2026-03-10,FIRMS missing-data list
+SNPP,2026-03-11,FIRMS missing-data list
+SNPP,2026-03-12,FIRMS missing-data list
+SNPP,2026-04-28,FIRMS missing-data list
+SNPP,2026-04-29,FIRMS missing-data list
+SNPP,2026-04-30,FIRMS missing-data list
+SNPP,2026-05-01,FIRMS missing-data list
+SNPP,2026-05-02,FIRMS missing-data list
+SNPP,2026-05-03,FIRMS missing-data list
+SNPP,2026-05-04,FIRMS missing-data list
+SNPP,2026-05-05,FIRMS missing-data list
+SNPP,2026-05-06,FIRMS missing-data list
+SNPP,2026-05-07,FIRMS missing-data list
+SNPP,2026-05-08,FIRMS missing-data list
+SNPP,2026-05-09,FIRMS missing-data list
+SNPP,2026-05-10,FIRMS missing-data list
+SNPP,2026-05-11,FIRMS missing-data list
+SNPP,2026-05-12,FIRMS missing-data list
+SNPP,2026-05-13,FIRMS missing-data list
+SNPP,2026-05-14,FIRMS missing-data list
+SNPP,2026-05-15,FIRMS missing-data list
+SNPP,2026-05-16,FIRMS missing-data list
+SNPP,2026-05-17,FIRMS missing-data list
+SNPP,2026-05-18,FIRMS missing-data list
+SNPP,2026-05-19,FIRMS missing-data list
+SNPP,2026-05-20,FIRMS missing-data list
+SNPP,2026-05-21,FIRMS missing-data list
+SNPP,2026-05-22,FIRMS missing-data list
+SNPP,2026-05-23,FIRMS missing-data list
+SNPP,2026-05-24,FIRMS missing-data list
+SNPP,2026-05-25,FIRMS missing-data list
+SNPP,2026-05-26,FIRMS missing-data list
+SNPP,2026-05-27,FIRMS missing-data list
+SNPP,2026-05-28,FIRMS missing-data list
+SNPP,2026-05-29,FIRMS missing-data list
+SNPP,2026-05-30,FIRMS missing-data list
+SNPP,2026-05-31,FIRMS missing-data list
+SNPP,2026-06-01,FIRMS missing-data list
+SNPP,2026-06-02,FIRMS missing-data list
+SNPP,2026-07-11,FIRMS missing-data list
+SNPP,2026-07-12,FIRMS missing-data list
+SNPP,2026-07-13,FIRMS missing-data list
+SNPP,2026-07-14,FIRMS missing-data list
+SNPP,2026-07-15,FIRMS missing-data list
+SNPP,2026-07-16,FIRMS missing-data list
