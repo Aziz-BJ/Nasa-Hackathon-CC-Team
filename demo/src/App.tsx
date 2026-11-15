@@ -1,17 +1,22 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// Checkpoint 3 version: adds Dates and Calendar. Replaced at checkpoint 4.
 // Map-first layout: the globe fills the screen; feature boxes around it open side drawers;
 // the bottom strip holds the legend, a one-line verdict and "More info".
-import { CalendarBlank, Info, MapPin, Stack, Table } from '@phosphor-icons/react'
+import { CalendarBlank, ChartLine, DownloadSimple, FireSimple, Info, MapPin, Planet, Stack, Table } from '@phosphor-icons/react'
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react'
 import { AboutPage } from './components/AboutPage'
+import { AnomalyChart } from './components/AnomalyChart'
 import { AreaPanel } from './components/AreaPanel'
 import { AreaSummary } from './components/AreaSummary'
 import { BurningCalendar } from './components/BurningCalendar'
 import { DisplayOptions } from './components/DisplayOptions'
+import { ExportButton } from './components/ExportButton'
 import { GlobeMap } from './components/GlobeMap'
+import { KpiRow } from './components/KpiRow'
 import { CompactLegend, Legend } from './components/Legend'
 import { MockBanner } from './components/MockBanner'
+import { OverlapChart } from './components/OverlapChart'
+import { ReportedChart } from './components/ReportedChart'
+import { SeasonalChart } from './components/SeasonalChart'
 import { BottomStrip } from './components/shell/BottomStrip'
 import { Drawer } from './components/shell/Drawer'
 import { FeatureRail, type FeatureBox } from './components/shell/FeatureRail'
@@ -25,12 +30,13 @@ import { useDataset } from './hooks/useDataset'
 import { cellTotals } from './lib/aggregate'
 import { areaFromPreset, validateDrawn } from './lib/area'
 import { buildCountScale, fmtCount } from './lib/colorScale'
-import { calendarMedians, summarizeMonth, VERDICT_LABELS } from './lib/indices'
+import { calendarMedians, summarizeMonth, VERDICT_LABELS, yearToDate } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures'
-import { labelYm, longLabelYm, type YearMonth } from './lib/months'
+import { labelYm, longLabelYm, parseYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
 import { SERIES_LABELS, type Manifest, type SeriesKey } from './lib/types'
 import { initialState, quickRanges, reducer, type AppState } from './state/appState'
+import { applyUrl, parseHash, toHash } from './state/urlState'
 
 export default function App() {
   const { manifest, overview, reported, error } = useDataset(dataSource)
@@ -52,11 +58,19 @@ interface Panel extends FeatureBox {
 
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`
 
-function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<ReturnType<typeof useDataset>, 'overview' | 'reported'>) {
+function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & Pick<ReturnType<typeof useDataset>, 'overview' | 'reported'>) {
   const [s, dispatch] = useReducer(reducer, m, (mm): AppState => {
     const init = initialState(mm)
-    return mm.presets[0] ? { ...init, area: areaFromPreset(mm.presets[0]) } : init
+    const withPreset = mm.presets[0] ? { ...init, area: areaFromPreset(mm.presets[0]) } : init
+    return applyUrl(mm, parseHash(window.location.hash), withPreset)
   })
+  // Keep the link shareable, and follow links pasted into the same tab.
+  useEffect(() => { window.history.replaceState(null, '', toHash(s)) }, [s])
+  useEffect(() => {
+    const onHash = () => dispatch({ type: 'applyUrl', manifest: m, url: parseHash(window.location.hash) })
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [m])
 
   const data = useAreaData(dataSource, m, s.area)
   const [drawError, setDrawError] = useState<string | null>(null)
@@ -91,6 +105,15 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
   const overviewFc = useMemo(() => (overview ? overviewToFeatures(overview, s.palette) : EMPTY_FC), [overview, s.palette])
 
   const focus = series ? summarizeMonth(values, series.months, s.to, m.baseline_years) : null
+  const ytd = series ? yearToDate(values, series.months, s.to, m.baseline_years) : null
+  let total: number | null = null
+  let monthsWithData = 0
+  for (let i = i0; i >= 0 && i <= i1; i++) {
+    const v = values[i]
+    if (v !== null && v !== undefined) { total = (total ?? 0) + v; monthsWithData++ }
+  }
+  const reportedForArea = reported?.series.find((r) => r.preset_id === s.area?.presetId) ?? null
+  const sensorsLine = `Sensors in ${labelYm(s.to)}: ${sensorsIn(m, s.to).map((x) => x.label).join(', ') || 'none'}.`
   const needsArea = <p className="muted">Choose an area with data first (Area box on the left).</p>
 
   const panels: Panel[] = [
@@ -124,6 +147,21 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
           legendId="cal-legend" onFocusMonth={setHoverMonth} />
         <CellDetail ym={hoverMonth} values={values} months={series.months} manifest={m} seriesLabel={seriesLabel} source={s.source} />
       </> },
+    { id: 'trends', side: 'right', wide: true, label: 'Trends', icon: <ChartLine aria-hidden />, title: 'Historical comparison',
+      guide: 'This year against a typical year, and every month against the multi-year average.',
+      body: () => !ready ? needsArea : <>
+        <SeasonalChart months={series.months} values={values} focusYear={parseYm(s.to).year} baselineYears={m.baseline_years} seriesLabel={seriesLabel} />
+        <AnomalyChart months={series.months} values={values} i0={i0} i1={i1} baselineYears={m.baseline_years} seriesLabel={seriesLabel} />
+      </> },
+    { id: 'sensors', side: 'right', wide: true, label: 'Sensors', icon: <Planet aria-hidden />, title: 'MODIS and VIIRS',
+      guide: 'Why harmonize: raw MODIS and VIIRS disagree, and joining them raw makes a false jump in 2012.',
+      body: () => !ready ? needsArea : <OverlapChart series={series} /> },
+    ...(reportedForArea ? [{ id: 'reported', side: 'right' as const, wide: true, label: 'Reported', icon: <FireSimple aria-hidden />, title: 'Detected and reported',
+      guide: 'Satellite detections next to fires reported on the ground, where a published statistic exists.',
+      body: () => !ready ? needsArea : <ReportedChart reported={reportedForArea} months={series.months} detected={series.values.harmonized} from={s.from} to={s.to} /> }] : []),
+    { id: 'download', side: 'right', label: 'Download', icon: <DownloadSimple aria-hidden />, title: 'Download and share',
+      guide: 'Get the monthly numbers as a CSV with their sources, or copy a link to this exact view.',
+      body: () => !ready || !s.area ? needsArea : <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1} /> },
   ]
   const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
     guide: '', body: () => <AboutPage manifest={m} /> }
@@ -212,6 +250,8 @@ function Explorer({ manifest: m, overview }: { manifest: Manifest } & Pick<Retur
           ? <CompactLegend scale={mapScale} title={`Hotspots per ${m.grid_deg}° cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
           : <span className="small muted">Choose an area to colour the globe.</span>}
         more={<>
+          {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel}
+            focus={focus} focusStatus={monthStatus(m, s.to, s.source)} ytd={ytd} baselineYears={m.baseline_years} sensorsLine={sensorsLine} />}
           <AreaSummary area={s.area} data={data} gridDeg={m.grid_deg} />
           <p className="small muted">Colours show satellite hotspot detections, not fires or burned area. They are rebuilt for the months you choose, so the full ramp is always used.</p>
         </>} />

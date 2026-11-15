@@ -4,6 +4,7 @@ import type { Area } from '../lib/area'
 import type { PaletteId } from '../lib/colorScale'
 import { addMonths, formatYm, parseYm, type YearMonth } from '../lib/months'
 import type { Manifest, SeriesKey } from '../lib/types'
+import { applyUrl, type UrlState } from './urlState'
 
 export type ScaleTo = 'range' | 'record'
 export type View = 'explore' | 'about'
@@ -31,6 +32,7 @@ export type Action =
   | { type: 'setBasemap'; basemap: Basemap }
   | { type: 'setLabels'; labels: boolean }
   | { type: 'setView'; view: View }
+  | { type: 'applyUrl'; manifest: Manifest; url: UrlState }
 
 /** The latest finished month. A month-to-date total is not comparable with full months, so we don't default to it. */
 export function lastComplete(m: Manifest): YearMonth {
@@ -63,6 +65,7 @@ export function reducer(s: AppState, a: Action): AppState {
     case 'setBasemap': return { ...s, basemap: a.basemap }
     case 'setLabels': return { ...s, labels: a.labels }
     case 'setView': return { ...s, view: a.view }
+    case 'applyUrl': return applyUrl(a.manifest, a.url, s)
   }
 }
 
