@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { Check, DownloadSimple, Link } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AreaSeries } from '../lib/aggregate'
 import type { Area } from '../lib/area'
 import { buildCsv, csvFilename } from '../lib/csv'
@@ -12,7 +12,6 @@ export function ExportButton({ manifest, area, series, i0, i1, onHotspots }: {
   /** Builds and saves the hotspots CSV; resolves to a short status line. Missing when the detection files are not available. */
   onHotspots?: () => Promise<string>
 }) {
-  const [copied, setCopied] = useState(false)
   const [hotspots, setHotspots] = useState<{ busy: boolean; note: string }>({ busy: false, note: '' })
   async function downloadHotspots() {
     if (!onHotspots) return
@@ -23,15 +22,21 @@ export function ExportButton({ manifest, area, series, i0, i1, onHotspots }: {
       setHotspots({ busy: false, note: `Could not prepare the hotspots: ${e instanceof Error ? e.message : String(e)}` })
     }
   }
+  const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const linkRef = useRef<HTMLInputElement>(null)
+  // When copying is blocked, select the link so Ctrl/Cmd+C finishes the job.
+  useEffect(() => {
+    if (copy === 'failed') { linkRef.current?.focus(); linkRef.current?.select() }
+  }, [copy])
   function download() {
     saveFile(csvFilename(area, series.months[i0], series.months[i1]), buildCsv(manifest, area, series, i0, i1), 'text/csv;charset=utf-8')
   }
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href)
-      setCopied(true)
+      setCopy('copied')
     } catch {
-      setCopied(false)
+      setCopy('failed')
     }
   }
   return (
@@ -46,11 +51,15 @@ export function ExportButton({ manifest, area, series, i0, i1, onHotspots }: {
       </button>
       <p className="small muted" aria-live="polite">{onHotspots ? hotspots.note : 'Hotspots are not available in this build.'}</p>
       <h3 style={{ marginTop: '1.25rem' }}>Share this view</h3>
-      <p className="small">The link keeps the area, months, data source, and whether the detections layer is on.</p>
-      <label className="small">Link<input type="text" readOnly value={window.location.href} onFocus={(e) => e.target.select()} style={{ width: '100%' }} /></label>
+      <p className="small">The link keeps the area, months, data source, colours, imagery and labels, and whether the detections layer is on.</p>
+      <label className="small">Link<input ref={linkRef} type="text" readOnly value={window.location.href} onFocus={(e) => e.target.select()} style={{ width: '100%' }} /></label>
       <button type="button" className="btn" onClick={copyLink} style={{ marginTop: '0.5rem' }}>
-        {copied ? <Check aria-hidden /> : <Link aria-hidden />} {copied ? 'Copied' : 'Copy link'}
+        {copy === 'copied' ? <Check aria-hidden /> : <Link aria-hidden />} {copy === 'copied' ? 'Copied' : 'Copy link'}
       </button>
+      <p role="status" className="small" style={{ marginTop: '0.5rem' }}>
+        {copy === 'copied' && 'Link copied to the clipboard.'}
+        {copy === 'failed' && 'Could not copy automatically (clipboard access is blocked). The link above is selected: press Ctrl+C (Cmd+C on a Mac) to copy it.'}
+      </p>
     </div>
   )
 }

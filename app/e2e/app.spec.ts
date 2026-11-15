@@ -5,6 +5,12 @@ import { readFileSync } from 'node:fs'
 
 const selection = (page: Page) => page.locator('[data-tour="selection"]')
 const headline = (page: Page) => page.locator('.strip-headline')
+/** Waits for finite CSS transitions and animations (drawers sliding in) to end, so checks see the final colours. */
+async function settled(page: Page) {
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+    .map((a) => a.finished.catch(() => undefined))))
+}
 async function openPanel(page: Page, name: string) {
   await page.getByRole('button', { name, exact: true }).click()
   await expect(page.locator('#drawer')).toBeVisible()
@@ -12,9 +18,9 @@ async function openPanel(page: Page, name: string) {
 
 test.describe('app', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem('hotspot-calendar-guide-seen', '1'))
     await page.goto('/')
     await expect(headline(page)).toContainText('fire cell-days')
+    await page.getByRole('button', { name: 'Skip guide' }).click() // it opens on every visit
   })
 
   test('loads real data with no login and no mock banner', async ({ page }) => {
@@ -82,16 +88,21 @@ test.describe('app', () => {
 
   test('drawing a circle on the globe selects an area', async ({ page, isMobile }) => {
     test.skip(isMobile, 'Drawing is checked on desktop; phones use the region list and typed coordinates.')
-    await page.waitForTimeout(2000) // let the globe finish flying to the first region
     await openPanel(page, 'Area')
-    await page.getByRole('button', { name: 'Circle' }).click()
     const { width, height } = page.viewportSize()!
     const [x, y] = [width * 0.68, height * 0.45] // right of the drawer, left of the boxes
-    await page.mouse.move(x, y)
-    await page.mouse.down()
-    await page.mouse.move(x + 50, y + 30, { steps: 8 })
-    await page.mouse.up()
-    await expect(selection(page)).toContainText('Drawn circle')
+    // The globe loads as its own file and then flies to the first region; a shape drawn during that flight is lost.
+    // Draw until it sticks rather than guessing how long the start takes.
+    await expect(async () => {
+      // Back to "Move globe" first: that clears a circle half-started by a missed attempt.
+      await page.getByRole('button', { name: 'Move globe' }).click()
+      await page.getByRole('button', { name: 'Circle' }).click()
+      await page.mouse.move(x, y)
+      await page.mouse.down()
+      await page.mouse.move(x + 50, y + 30, { steps: 8 })
+      await page.mouse.up()
+      await expect(selection(page)).toContainText('Drawn circle', { timeout: 2000 })
+    }).toPass({ timeout: 20_000 })
   })
 
   test('changing months rescales the calendar and keyboard moves between months', async ({ page }) => {
@@ -117,7 +128,7 @@ test.describe('app', () => {
     await openPanel(page, 'Download')
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV' }).click()])
     const text = readFileSync((await download.path())!, 'utf8')
-    expect(text).toContain('Fire cell-days count satellite detections, not fires or burned area')
+    expect(text).toContain('Fire cell-days count satellite detections; not fires or burned area')
     expect(text).toContain('fire_cell_days_harmonized,low_90,high_90,source')
     expect(text).not.toContain('MOCK DATA')
     expect(text.split('\n').filter((l) => /^\d{4},/.test(l))).toHaveLength(12)
@@ -207,7 +218,11 @@ test.describe('app', () => {
   })
 
   test('no automatic accessibility violations', async ({ page }) => {
-    const scan = async () => (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => `${v.id}: ${v.help}`)
+    const scan = async () => {
+      await settled(page)
+      return (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations
+        .map((v) => `${v.id}: ${v.help} (${v.nodes.map((n) => n.target.join(' ')).join(', ')})`)
+    }
     expect(await scan()).toEqual([])
     await openPanel(page, 'Calendar')
     expect(await scan()).toEqual([])
@@ -221,16 +236,20 @@ test.describe('app', () => {
   })
 })
 
-test('the guide opens on the first visit and can be reopened', async ({ page }) => {
+test('the guide opens every time the app is opened, from a shared link too, and can be reopened', async ({ page, context }) => {
   await page.goto('/')
   await expect(page.getByRole('dialog')).toContainText('Step 1 of')
   await page.getByRole('button', { name: 'Next' }).click()
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Fire cell-days' })).toBeVisible()
   await page.getByRole('button', { name: 'Skip guide' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.reload()
-  await expect(headline(page)).toContainText('fire cell-days')
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Guide' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Step 1 of')
+  // Opening the app again in the same browser, here from a shared link, shows the guide again.
+  const again = await context.newPage()
+  await again.goto('/#area=region:sardinia&from=2021-07&to=2021-08&src=harmonized')
+  await expect(again.getByRole('dialog')).toContainText('Step 1 of')
+  await again.getByRole('button', { name: 'Skip guide' }).click()
+  await expect(again.getByRole('dialog')).toHaveCount(0)
+  await expect(headline(again)).toContainText('fire cell-days')
+  await again.getByRole('button', { name: 'Guide' }).click()
+  await expect(again.getByRole('dialog')).toContainText('Step 1 of')
 })

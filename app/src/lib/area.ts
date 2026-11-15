@@ -3,12 +3,19 @@ import { area as turfArea } from '@turf/area'
 import { bbox as turfBbox } from '@turf/bbox'
 import { bboxPolygon } from '@turf/bbox-polygon'
 import { circle } from '@turf/circle'
-import { MAX_AREA_KM2 } from '../config'
+import { MAX_AREA_KM2, MIN_AREA_KM2 } from '../config'
 import type { Outlines } from './data'
 import { unionBbox, type Bbox } from './grid'
 import type { Manifest } from './types'
 
 export type AreaSource = 'region' | 'drawn' | 'bbox' | 'point'
+
+/** The drawing tool a drawn shape came from. */
+export type DrawnKind = 'circle' | 'rectangle' | 'polygon' | 'freehand'
+export const DRAWN_KINDS: readonly DrawnKind[] = ['circle', 'rectangle', 'polygon', 'freehand']
+export const DRAWN_LABEL: Record<DrawnKind, string> = {
+  circle: 'Drawn circle', rectangle: 'Drawn rectangle', polygon: 'Drawn polygon', freehand: 'Drawn freehand area',
+}
 
 export interface Area {
   label: string
@@ -17,6 +24,10 @@ export interface Area {
   regionIds?: string[]
   /** The region or group id, for links and region-only data (reported fires). */
   regionKey?: string
+  /** Drawn shapes: the tool they were drawn with (links keep the exact outline). */
+  kind?: DrawnKind
+  /** Typed point areas: latitude, longitude and radius in km (links keep them exactly). */
+  point?: [lat: number, lon: number, radiusKm: number]
   geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon
   bbox: Bbox
   areaKm2: number
@@ -28,6 +39,16 @@ const fmtDeg = (x: number) => String(Math.round(x * 100) / 100)
 function finish(geometry: GeoJSON.Polygon, label: string, source: AreaSource): Area {
   const feature: GeoJSON.Feature<GeoJSON.Polygon> = { type: 'Feature', properties: {}, geometry }
   return { label, source, geometry, bbox: turfBbox(feature) as Bbox, areaKm2: turfArea(feature) / 1e6 }
+}
+
+/**
+ * A typed coordinate or radius. Accepts a decimal comma ("38,8", usual in Italy) and the typographic minus ("−8.7", as in
+ * the form's hint); an empty field is NaN, not 0.
+ */
+export function parseCoordinate(s: string): number {
+  const t = s.trim().replace(/^[\u2212\u2013]/, '-')
+  if (t === '') return NaN
+  return Number(/^[-+]?\d*,\d+$/.test(t) ? t.replace(',', '.') : t)
 }
 
 /** Returns an error message, or null when the box is valid. Order is west, south, east, north (FIRMS area API order). */
@@ -49,8 +70,12 @@ export function validatePoint(lat: number, lon: number, radiusKm: number): strin
   return null
 }
 
-/** Returns an error message when the area is too large to load quickly. */
+/** Returns an error message when the area is too large to load quickly, or too small to measure. */
 export function checkSize(a: Area): string | null {
+  if (!(a.areaKm2 >= MIN_AREA_KM2)) {
+    return `This area is ${a.areaKm2 >= 1 ? `${fmtKm2(a.areaKm2)} km²` : 'under 1 km²'}, smaller than one ${fmtKm2(MIN_AREA_KM2)} km² fire cell, `
+      + 'so its numbers would mean little: choose a larger area.'
+  }
   if (a.areaKm2 <= MAX_AREA_KM2) return null
   return `This area is ${fmtKm2(a.areaKm2)} km². The limit is ${fmtKm2(MAX_AREA_KM2)} km² so results stay fast: choose a smaller area.`
 }
@@ -62,11 +87,30 @@ export function areaFromBbox(bbox: Bbox, label?: string, source: AreaSource = 'b
 
 export function areaFromPoint(lat: number, lon: number, radiusKm: number): Area {
   const geom = circle([lon, lat], radiusKm, { units: 'kilometers', steps: 64 }).geometry
-  return finish(geom, `${radiusKm} km around ${fmtDeg(lat)}, ${fmtDeg(lon)}`, 'point')
+  return { ...finish(geom, `${radiusKm} km around ${fmtDeg(lat)}, ${fmtDeg(lon)}`, 'point'), point: [lat, lon, radiusKm] }
 }
 
 export function areaFromPolygon(geometry: GeoJSON.Polygon, label = 'Drawn area'): Area {
   return finish(geometry, label, 'drawn')
+}
+
+/** Most points a drawn outline keeps, so its link stays a few kB. */
+export const MAX_DRAWN_POINTS = 300
+const r4 = (x: number) => Math.round(x * 1e4) / 1e4
+
+/**
+ * A shape drawn on the globe, labelled by the tool that drew it. The outline is rounded to 4 decimals (about 10 m) and long
+ * freehand outlines are thinned, so the shape on screen is exactly the one its link reopens, with the same numbers.
+ */
+export function areaFromDrawn(geometry: GeoJSON.Polygon, kind: DrawnKind): Area {
+  let ring = geometry.coordinates[0].map(([x, y]) => [r4(x), r4(y)])
+  ring = ring.filter((p, i) => i === 0 || p[0] !== ring[i - 1][0] || p[1] !== ring[i - 1][1])
+  if (ring.length > MAX_DRAWN_POINTS) {
+    const step = (ring.length - 1) / (MAX_DRAWN_POINTS - 1)
+    ring = Array.from({ length: MAX_DRAWN_POINTS - 1 }, (_, k) => ring[Math.round(k * step)])
+    ring.push(ring[0])
+  }
+  return { ...finish({ type: 'Polygon', coordinates: [ring] }, DRAWN_LABEL[kind], 'drawn'), kind }
 }
 
 /** Drawn shapes follow the same rules as typed ones: no 180° crossing, and the size limit. */

@@ -89,6 +89,7 @@ export function BurningCalendar(p: BurningCalendarProps) {
   return (
     <div>
       <label className="small"><input type="checkbox" checked={showNumbers} onChange={(e) => setShowNumbers(e.target.checked)} /> Show numbers in cells (table view)</label>
+      <p className="scroll-hint small muted" aria-hidden>Swipe sideways to see all months and the year totals →</p>
       <div className="calendar-wrap">
         <table className="calendar" ref={tableRef} onKeyDown={move} aria-describedby={p.legendId}>
           <caption className="sr-only">

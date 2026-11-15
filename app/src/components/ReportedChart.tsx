@@ -2,9 +2,10 @@
 // "Number of fires detected and reported": satellite detections next to fires reported on the ground,
 // shown only for preset regions that have a published ground statistic. Context only; never replaces FIRMS.
 import * as Plot from '@observablehq/plot'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { addMonths, monthRange, type YearMonth } from '../lib/months'
 import type { ReportedSeries } from '../lib/types'
+import { chartFilename, type SvgMeta } from '../lib/download'
 import { PlotFigure } from './PlotFigure'
 
 export interface ReportedChartProps {
@@ -13,11 +14,13 @@ export interface ReportedChartProps {
   detected: (number | null)[]
   from: YearMonth
   to: YearMonth
+  /** The selected area's name, written into the downloaded image and its filename. */
+  areaLabel?: string
 }
 
 const toDate = (ym: YearMonth) => new Date(`${ym}-01T00:00:00Z`)
 
-export function ReportedChart({ reported, months, detected, from, to }: ReportedChartProps) {
+export function ReportedChart({ reported, months, detected, from, to, areaLabel }: ReportedChartProps) {
   const make = useCallback((width: number) => {
     const rMonths = monthRange(reported.first_month, addMonths(reported.first_month, reported.values.length - 1))
     const rows: { date: Date; v: number; panel: string }[] = []
@@ -42,10 +45,20 @@ export function ReportedChart({ reported, months, detected, from, to }: Reported
       ],
     })
   }, [reported, months, detected, from, to])
+  const meta = useMemo<SvgMeta>(() => ({
+    title: 'Fires detected and fires reported',
+    area: areaLabel,
+    unit: `reported: ${reported.unit}; detected: satellite fire cell-days (separate panels with different scales)`,
+    legend: [
+      { label: `Reported: ${reported.unit}`, color: '#409cff' },
+      { label: 'Detected: satellite fire cell-days', color: '#ff9f0a' },
+    ],
+    source: `Data: NASA FIRMS (detected, harmonized MODIS + VIIRS record); ${reported.source} (reported)`,
+  }), [areaLabel, reported])
   return (
     <figure className="card" id="reported">
       <header><h2>Fires detected and fires reported</h2></header>
-      <PlotFigure make={make} filename={"detected-vs-reported.svg"} label="Two line charts: satellite fire cell-days and fires reported on the ground, by month." />
+      <PlotFigure make={make} filename={chartFilename('detected-vs-reported', areaLabel)} meta={meta} label="Two line charts: satellite fire cell-days and fires reported on the ground, by month." />
       <figcaption className="caption">
         Top and bottom use different units and scales. Ground reports count incidents attended; satellites count hot pixels.
         They are not expected to match, but busy seasons should line up. Source: {reported.source} ({reported.licence}). <a href={reported.url}>Data page</a>.

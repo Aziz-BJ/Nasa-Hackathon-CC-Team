@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Drawer } from './Drawer'
-import { cardStyle, GuideTour, guideSeen, markGuideSeen } from './GuideTour'
+import { cardStyle, GuideTour } from './GuideTour'
 
 const steps = [
   { target: null, title: 'Welcome', text: 'Intro' },
@@ -31,12 +31,6 @@ describe('GuideTour', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Skip guide' }))
     expect(onClose).toHaveBeenCalledTimes(2)
   })
-  it('remembers that the guide was seen', () => {
-    localStorage.clear()
-    expect(guideSeen()).toBe(false)
-    markGuideSeen()
-    expect(guideSeen()).toBe(true)
-  })
   it('gives focus back on close, and its Esc does not close a drawer underneath', async () => {
     const onGuideClose = vi.fn()
     const onDrawerClose = vi.fn()
@@ -48,6 +42,17 @@ describe('GuideTour', () => {
     expect(onDrawerClose).not.toHaveBeenCalled()
     rerender(<><button>Guide</button><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer></>)
     expect(screen.getByRole('button', { name: 'Guide' })).toHaveFocus()
+  })
+  it('closes only itself on Esc even after a click beside the card (focus used to fall to the page)', async () => {
+    const onGuideClose = vi.fn()
+    const onDrawerClose = vi.fn()
+    render(<><Drawer open side="left" title="Area" onClose={onDrawerClose}><p>x</p></Drawer><GuideTour steps={steps} onClose={onGuideClose} /></>)
+    await userEvent.click(screen.getByRole('dialog'))
+    expect(screen.getByRole('dialog')).toContainElement(document.activeElement as HTMLElement)
+    ;(document.activeElement as HTMLElement).blur()
+    await userEvent.keyboard('{Escape}')
+    expect(onGuideClose).toHaveBeenCalledTimes(1)
+    expect(onDrawerClose).not.toHaveBeenCalled()
   })
   it('places the card above a target it cannot sit beside', () => {
     // Phone: 390 wide, a box near the bottom

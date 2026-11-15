@@ -2,10 +2,11 @@
 // The core evidence: raw MODIS and raw VIIRS disagree; a record spliced from the raw counts jumps where the source
 // switches (July 2021, as in the harmonized record); the harmonized line does not.
 import * as Plot from '@observablehq/plot'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { AreaSeries } from '../lib/aggregate'
 import { parseYm } from '../lib/months'
 import { SERIES_KEYS } from '../lib/types'
+import { chartFilename, type SvgMeta } from '../lib/download'
 import { PlotFigure } from './PlotFigure'
 
 // Okabe-Ito colours (safe for colour-vision deficiency) plus a dash pattern and a symbol per line.
@@ -43,7 +44,11 @@ export function yearlyTotals(s: AreaSeries): Row[] {
   return rows.sort((a, b) => a.year - b.year)
 }
 
-export function OverlapChart({ series, unit }: { series: AreaSeries; unit: string }) {
+export function OverlapChart({ series, unit, areaLabel }: {
+  series: AreaSeries; unit: string
+  /** The selected area's name, written into the downloaded image and its filename. */
+  areaLabel?: string
+}) {
   const make = useCallback((width: number) => {
     const rows = yearlyTotals(series)
     const keys = Object.keys(STYLE).filter((k) => rows.some((r) => r.key === k))
@@ -68,10 +73,20 @@ export function OverlapChart({ series, unit }: { series: AreaSeries; unit: strin
       ],
     })
   }, [series, unit])
+  const meta = useMemo<SvgMeta>(() => {
+    const rows = yearlyTotals(series)
+    return {
+      title: 'Why harmonize: one record, two instruments',
+      area: areaLabel,
+      unit: `${unit} per year (full calendar years only)`,
+      legend: Object.entries(STYLE).filter(([k]) => rows.some((r) => r.key === k))
+        .map(([, st]) => ({ label: st.label, color: st.color, dash: st.dash && st.dash !== '1,0' ? st.dash : undefined })),
+    }
+  }, [series, unit, areaLabel])
   return (
     <figure className="card" id="sensors">
       <header><h2>Why harmonize: one record, two instruments</h2></header>
-      <PlotFigure make={make} filename={"modis-vs-viirs.svg"} label={`Line chart of yearly ${unit} for raw Aqua MODIS, raw S-NPP and NOAA-20 VIIRS, a naive splice of the raw counts, and the harmonized record.`} />
+      <PlotFigure make={make} filename={chartFilename('modis-vs-viirs', areaLabel)} meta={meta} label={`Line chart of yearly ${unit} for raw Aqua MODIS, raw S-NPP and NOAA-20 VIIRS, a naive splice of the raw counts, and the harmonized record.`} />
       <div className="legend" aria-label="Lines">
         {Object.entries(STYLE).map(([k, st]) => (
           <span key={k}><span className="swatch" style={{ background: 'none', borderTop: `3px ${st.dash ? 'dashed' : 'solid'} ${st.color}`, height: 0 }} />{st.label}</span>

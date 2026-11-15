@@ -1,8 +1,9 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // The only place that knows file names and shapes (contract version 2, docs/DATA_CONTRACT.md).
-import { ENTRY_STRIDE, type CellFile, type DetectionsFile, type DetectionsIndex, type Manifest, type RegionsFile, type ReportedFile } from './types'
+import { monthsBetween } from './months'
+import { ENTRY_STRIDE, SERIES_KEYS, type CellFile, type DetectionsFile, type DetectionsIndex, type Manifest, type RegionsFile, type ReportedFile } from './types'
 
-type FetchFn = (url: string) => Promise<Response>
+type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
 export type Outlines = GeoJSON.FeatureCollection<GeoJSON.MultiPolygon, { id: string; name: string }>
 
@@ -39,6 +40,44 @@ export function validateManifest(raw: unknown): Manifest {
   check(!!m.days && (['aqua', 'snpp', 'noaa20', 'none'] as const).every((k) => Array.isArray(m.days[k])),
     'manifest.days needs aqua, snpp, noaa20 and none')
   return m
+}
+
+const isObject = (x: unknown): x is Record<string, unknown> => x !== null && typeof x === 'object' && !Array.isArray(x)
+
+/** regions.json must hold a full monthly series for every manifest region, or the app would show wrong numbers. */
+export function validateRegions(raw: unknown, m: Manifest): RegionsFile {
+  check(isObject(raw), 'regions.json is not a JSON object')
+  const rf = raw as unknown as RegionsFile
+  check(isObject(rf.series), 'regions.json has no series')
+  check(isObject(rf.factors), 'regions.json has no factors')
+  const n = monthsBetween(m.first_month, m.last_month) + 1
+  for (const r of m.regions) {
+    const s = rf.series[r.id]
+    check(isObject(s), `regions.json has no series for ${r.id}`)
+    for (const k of [...SERIES_KEYS, 'low', 'high'] as const) {
+      check(Array.isArray(s[k]) && s[k].length === n, `regions.json: ${r.id}.${k} must have ${n} months`)
+    }
+  }
+  check(rf.mtd === null || rf.mtd === undefined || (isObject(rf.mtd) && Array.isArray(rf.mtd.years) && isObject(rf.mtd.series)),
+    'regions.json: mtd must be null or have years and series')
+  return { ...rf, mtd: rf.mtd ?? null }
+}
+
+/** outlines.json is optional; a broken one is reported here and the app draws region boxes instead. */
+export function validateOutlines(raw: unknown): Outlines {
+  check(isObject(raw) && raw.type === 'FeatureCollection' && Array.isArray(raw.features), 'outlines.json is not a GeoJSON FeatureCollection')
+  const o = raw as unknown as Outlines
+  o.features.forEach((f, i) => check(
+    isObject(f) && isObject(f.properties) && typeof f.properties.id === 'string' && isObject(f.geometry)
+      && f.geometry.type === 'MultiPolygon' && Array.isArray(f.geometry.coordinates),
+    `outlines.json feature ${i} needs properties.id and a MultiPolygon`))
+  return o
+}
+
+/** reported.json is optional; anything without a list of series counts as missing. */
+export function validateReported(raw: unknown): ReportedFile | null {
+  return isObject(raw) && Array.isArray(raw.series) && raw.series.every((s) => isObject(s) && typeof s.preset_id === 'string')
+    ? raw as unknown as ReportedFile : null
 }
 
 /** A cell file with an index, so one cell's months can be read without scanning the whole file. */
@@ -85,31 +124,67 @@ function isJson(res: Response): boolean {
   return type.includes('json')
 }
 
-export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetch(u)) {
+export interface Timeouts {
+  /** Longest wait for a server to start answering. */
+  answerMs: number
+  /** Longest wait for a whole file once it has started (the biggest cell file is 2 MB). */
+  bodyMs: number
+}
+
+/** The parallel lists of a detections file (docs/DATA_CONTRACT.md). */
+const DETECTION_LISTS = ['s', 'd', 'x', 'y', 'w', 'h', 'p', 't', 'c', 'q'] as const
+
+export const DEFAULT_TIMEOUTS: Timeouts = { answerMs: 20_000, bodyMs: 120_000 }
+
+export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u, init) => fetch(u, init), timeouts: Timeouts = DEFAULT_TIMEOUTS) {
   const cells = new Map<string, Promise<LoadedCells>>()
   const detectionFiles = new Map<string, Promise<DetectionsFile>>()
   let detectionsIndexP: Promise<DetectionsIndex | null> | null = null
 
-  async function getJson<T>(path: string): Promise<T> {
-    const res = await fetchFn(baseUrl + path)
-    if (!res.ok || !isJson(res)) throw new DataError(`Could not load ${path} (HTTP ${res.status})`)
-    return (await res.json()) as T
+  /**
+   * A file that never answers must end in an error the user can retry, not in "Loading…" forever.
+   * optional: a missing file (404, or the dev server's HTML fallback) resolves to null instead of failing.
+   */
+  async function getJson<T>(path: string, optional = false): Promise<T> {
+    const abort = new AbortController()
+    let timedOut = ''
+    const after = (ms: number, what: string) => setTimeout(() => { timedOut = what; abort.abort() }, ms)
+    let timer = after(timeouts.answerMs, `no answer after ${Math.round(timeouts.answerMs / 1000)} s`)
+    try {
+      const res = await fetchFn(baseUrl + path, { signal: abort.signal })
+      clearTimeout(timer)
+      if (optional && (res.status === 404 || (res.ok && !isJson(res)))) return null as T
+      if (!res.ok || !isJson(res)) throw new DataError(`Could not load ${path} (HTTP ${res.status})`)
+      timer = after(timeouts.bodyMs, `still loading after ${Math.round(timeouts.bodyMs / 1000)} s`)
+      return (await res.json()) as T
+    } catch (e) {
+      if (e instanceof DataError) throw e
+      if (timedOut) throw new DataError(`Could not load ${path} (${timedOut})`)
+      throw new DataError(e instanceof SyntaxError ? `${path} is not valid JSON` : `Could not load ${path} (network error)`)
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   return {
     async manifest(): Promise<Manifest> {
       return validateManifest(await getJson<unknown>('manifest.json'))
     },
-    regions(): Promise<RegionsFile> {
-      return getJson<RegionsFile>('regions.json')
+    /** Check the result against the manifest with validateRegions. */
+    regions(): Promise<unknown> {
+      return getJson<unknown>('regions.json')
     },
-    outlines(): Promise<Outlines> {
-      return getJson<Outlines>('outlines.json')
+    async outlines(): Promise<Outlines> {
+      return validateOutlines(await getJson<unknown>('outlines.json'))
     },
     cells(region: string): Promise<LoadedCells> {
       let p = cells.get(region)
       if (!p) {
-        p = getJson<CellFile>(`cells/${region}.json`).then(indexCells)
+        p = getJson<CellFile>(`cells/${region}.json`).then((file) => {
+          check(isObject(file) && Array.isArray(file.cells) && Array.isArray(file.entries) && Array.isArray(file.mtd),
+            `cells/${region}.json needs cells, entries and mtd lists`)
+          return indexCells(file)
+        })
         cells.set(region, p)
         p.catch(() => cells.delete(region))
       }
@@ -117,14 +192,14 @@ export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetc
     },
     /**
      * Optional layer: raw detections at native pixel size. Missing (404, or the dev server's HTML fallback) resolves to
-     * null: this build has no detections. A network or server error rejects and is not kept, so the next call tries again.
+     * null: this build has no detections. A network or server error, or no answer in time, rejects and is not kept, so
+     * the next call tries again.
      */
     detectionsIndex(): Promise<DetectionsIndex | null> {
       if (!detectionsIndexP) {
-        const p = fetchFn(baseUrl + 'detections/index.json').then(async (res) => {
-          if (res.status === 404 || (res.ok && !isJson(res))) return null
-          if (!res.ok) throw new DataError(`Could not load detections/index.json (HTTP ${res.status})`)
-          return (await res.json()) as DetectionsIndex
+        const p = getJson<unknown>('detections/index.json', true).then((ix) => {
+          check(ix === null || (isObject(ix) && isObject(ix.regions)), 'detections/index.json needs a regions object')
+          return ix as DetectionsIndex | null
         })
         detectionsIndexP = p
         p.catch(() => { if (detectionsIndexP === p) detectionsIndexP = null })
@@ -135,18 +210,20 @@ export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetc
       const key = `${region}/${year}`
       let p = detectionFiles.get(key)
       if (!p) {
-        p = getJson<DetectionsFile>(`detections/${key}.json`)
+        p = getJson<unknown>(`detections/${key}.json`).then((f) => {
+          check(isObject(f) && Array.isArray(f.s) && DETECTION_LISTS.every((k) => Array.isArray(f[k]) && (f[k] as unknown[]).length === (f.s as unknown[]).length),
+            `detections/${key}.json needs lists ${DETECTION_LISTS.join(', ')} of equal length`)
+          return f as unknown as DetectionsFile
+        })
         detectionFiles.set(key, p)
         p.catch(() => detectionFiles.delete(key))
       }
       return p
     },
-    /** Optional file. Missing (404, the dev server's HTML fallback) or unreadable means "no reported data". */
+    /** Optional file. Missing (404, the dev server's HTML fallback), slow or unreadable means "no reported data". */
     async reported(): Promise<ReportedFile | null> {
       try {
-        const res = await fetchFn(baseUrl + 'reported.json')
-        if (!res.ok || !isJson(res)) return null
-        return (await res.json()) as ReportedFile
+        return validateReported(await getJson<unknown>('reported.json'))
       } catch {
         return null
       }

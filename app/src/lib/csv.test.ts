@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { FIX_CELLS_AA, FIX_MANIFEST, FIX_OUTLINES, FIX_REGIONS } from '../test/fixtures'
 import { selectCells, seriesFromCells, seriesFromRegions } from './aggregate'
 import { areaFromBbox, areaFromRegion } from './area'
-import { buildCsv, CSV_COLUMNS, csvFilename } from './csv'
+import { areaSlug, buildCsv, CSV_COLUMNS, csvFilename } from './csv'
 import { indexCells, type Outlines } from './data'
 import type { Manifest, RegionsFile } from './types'
 
@@ -15,8 +15,9 @@ const HERE = dirname(fileURLToPath(import.meta.url))
 const realJson = <T>(name: string): T => JSON.parse(readFileSync(resolve(HERE, '../../public/data/real', name), 'utf8')) as T
 const NOW = new Date('2026-11-15T12:00:00Z')
 
-const dataRows = (csv: string) => csv.trim().split('\n').filter((l) => !l.startsWith('#'))
-const comments = (csv: string) => csv.trim().split('\n').filter((l) => l.startsWith('#'))
+const strip = (csv: string) => csv.replace(/^\uFEFF/, '')
+const dataRows = (csv: string) => strip(csv).trim().split('\n').filter((l) => !l.startsWith('#'))
+const comments = (csv: string) => strip(csv).trim().split('\n').filter((l) => l.startsWith('#'))
 
 describe('buildCsv with the small fixture', () => {
   const m = FIX_MANIFEST
@@ -29,19 +30,19 @@ describe('buildCsv with the small fixture', () => {
 
   it('starts with provenance comments: unit, method, validation, baseline, caveat', () => {
     const text = comments(regionCsv).join('\n')
-    expect(regionCsv.startsWith('# ')).toBe(true)
+    expect(regionCsv.startsWith('\uFEFF# ')).toBe(true)
     expect(text).toMatch(/Unit: fire cell-days = 5 km cells/)
     expect(text).toMatch(/Method: Test method \(v0\)/)
-    expect(text).toMatch(/Validation .*R² 0\.9, 90% inside the 90% range/)
-    expect(text).toMatch(/same calendar month in 2019-2019, leaving out the month's own year/)
+    expect(text).toMatch(/Validation .*R² 0\.9; 90% inside the 90% range/)
+    expect(text).toMatch(/same calendar month in 2019-2019; leaving out the month's own year/)
     expect(text).toMatch(/not fires or burned area/)
-    expect(text).toMatch(/Area: Region A \(1,000 km²; bbox W 0, S 0, E 2, N 2\)/)
+    expect(text).toMatch(/Area: Region A \(1 000 km²; bbox W 0; S 0; E 2; N 2\)/)
     expect(text).not.toMatch(/MOCK/)
   })
   it('says a region uses the harmonized record, and a group adds ranges up', () => {
     expect(regionCsv).toMatch(/harmonized record for this region\./)
     expect(regionCsv).not.toMatch(/estimate/i)
-    expect(groupCsv).toMatch(/for these regions, added together/)
+    expect(groupCsv).toMatch(/for these regions; added together/)
     expect(groupCsv).toMatch(/wider than the true range/)
     expect(regionCsv).not.toMatch(/wider than the true range/)
   })
@@ -50,9 +51,22 @@ describe('buildCsv with the small fixture', () => {
     expect(drawnCsv).toMatch(/has no 90% range/)
     expect(drawnCsv).toMatch(/Raw sensor columns are exact/)
   })
+  it('starts with a UTF-8 BOM and keeps commas out of every comment line', () => {
+    for (const csv of [regionCsv, groupCsv, drawnCsv]) {
+      expect(csv.charCodeAt(0)).toBe(0xfeff)
+      expect(csv.indexOf('\uFEFF', 1)).toBe(-1)
+      for (const l of comments(csv)) expect(l).not.toContain(',')
+      const rows = dataRows(csv)
+      expect(rows[0].split(',')).toEqual([...CSV_COLUMNS])
+      expect(rows[0].split(',')).toHaveLength(15)
+      for (const r of rows) expect(r.split(',')).toHaveLength(15)
+      expect(csv.split('\n').slice(0, comments(csv).length).every((l, i) => (i === 0 ? l.startsWith('\uFEFF#') : l.startsWith('#')))).toBe(true)
+    }
+    expect(comments(drawnCsv)[1]).toContain('Test; "box"')
+  })
   it('flags mock datasets', () => {
     const mock = buildCsv({ ...m, mock: true }, regionArea, seriesFromRegions(m, FIX_REGIONS, ['aa']), 0, 1, NOW)
-    expect(mock).toContain('MOCK DATA, NOT REAL')
+    expect(mock).toContain('MOCK DATA - NOT REAL')
   })
   it('writes the column list of CSV_COLUMNS and one row per month with the same number of fields', () => {
     const rows = dataRows(regionCsv)
@@ -85,6 +99,11 @@ describe('buildCsv with the small fixture', () => {
   it('does not mention an unfinished month when the range stops before it', () => {
     const csv = buildCsv(m, regionArea, seriesFromRegions(m, FIX_REGIONS, ['aa']), 0, 22, NOW)
     expect(csv).not.toMatch(/is not finished/)
+  })
+  it('shares the area slug', () => {
+    expect(areaSlug('Box W 13, S 37.3, E 15.5, N 38.3')).toBe('box-w-13-s-37-3-e-15-5-n-38-3')
+    expect(areaSlug('Sicily')).toBe('sicily')
+    expect(areaSlug('???')).toBe('area')
   })
   it('makes a safe filename', () => {
     expect(csvFilename(drawn, '2019-01', '2020-12')).toBe('fire-cell-days_test-box_2019-01_2020-12.csv')

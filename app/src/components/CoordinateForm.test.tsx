@@ -27,6 +27,16 @@ describe('CoordinateForm', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/West must be less than east/)
     expect(onArea).not.toHaveBeenCalled()
   })
+  it('accepts decimal commas (they used to give only "Enter all four numbers")', async () => {
+    const onArea = vi.fn()
+    render(<CoordinateForm onArea={onArea} />)
+    await userEvent.type(screen.getByLabelText('West'), '7,5')
+    await userEvent.type(screen.getByLabelText('South'), '38,8')
+    await userEvent.type(screen.getByLabelText('East'), '10')
+    await userEvent.type(screen.getByLabelText('North'), '41,3')
+    await userEvent.click(screen.getByRole('button', { name: 'Use these coordinates' }))
+    expect(onArea.mock.calls[0][0].bbox).toEqual([7.5, 38.8, 10, 41.3])
+  })
   it('builds a circle from a point', async () => {
     const onArea = vi.fn()
     render(<CoordinateForm onArea={onArea} />)

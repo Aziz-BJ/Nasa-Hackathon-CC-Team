@@ -4,9 +4,9 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { FIX_CELLS_AA, FIX_CELLS_BB, FIX_MANIFEST } from '../test/fixtures'
-import { createDataSource, DataError, indexCells, validateManifest } from './data'
-import type { CellFile } from './types'
+import { FIX_CELLS_AA, FIX_CELLS_BB, FIX_MANIFEST, FIX_OUTLINES } from '../test/fixtures'
+import { createDataSource, DataError, indexCells, validateManifest, validateOutlines, validateRegions } from './data'
+import type { CellFile, Manifest } from './types'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const realFile = (name: string): unknown => JSON.parse(readFileSync(resolve(HERE, '../../public/data/real', name), 'utf8'))
@@ -101,7 +101,7 @@ describe('indexCells', () => {
 
 describe('createDataSource', () => {
   it('reads the three whole-dataset files from the dataset folder', async () => {
-    const fetchFn = vi.fn(async (url: string) => json(url.endsWith('manifest.json') ? FIX_MANIFEST : { url }))
+    const fetchFn = vi.fn(async (url: string) => json(url.endsWith('manifest.json') ? FIX_MANIFEST : url.endsWith('outlines.json') ? FIX_OUTLINES : { url }))
     const ds = createDataSource('/data/real/', fetchFn)
     expect((await ds.manifest()).dataset_name).toBe('Fixture')
     await ds.regions()
@@ -137,7 +137,24 @@ describe('createDataSource', () => {
     await ds.cells('aa')
     await ds.cells('aa')
     expect(fetchFn).toHaveBeenCalledTimes(2)
-    expect(fetchFn).toHaveBeenLastCalledWith('/data/x/cells/aa.json')
+    expect(fetchFn.mock.lastCall?.[0]).toBe('/data/x/cells/aa.json')
+  })
+  it('gives up on a file that never answers, with an error that names it', async () => {
+    const never = (_url: string, init?: RequestInit) => new Promise<Response>((_ok, fail) => {
+      init?.signal?.addEventListener('abort', () => fail(new DOMException('aborted', 'AbortError')))
+    })
+    const ds = createDataSource('/', never, { answerMs: 20, bodyMs: 20 })
+    await expect(ds.manifest()).rejects.toThrow(/Could not load manifest.json \(no answer after/)
+    await expect(ds.cells('aa')).rejects.toThrow(DataError)
+    // The optional detections index too: a hang is an error that can be retried, not "no detections".
+    await expect(ds.detectionsIndex()).rejects.toThrow(/detections\/index.json \(no answer after/)
+  })
+  it('turns a network failure into a data error', async () => {
+    const ds = createDataSource('/', async () => { throw new TypeError('Failed to fetch') })
+    await expect(ds.regions()).rejects.toThrow(/Could not load regions.json \(network error\)/)
+  })
+  it('rejects a cell file of the wrong shape instead of crashing later', async () => {
+    await expect(createDataSource('/', async () => json({})).cells('aa')).rejects.toThrow(/cells, entries and mtd/)
   })
   it('treats a missing detections index as absent, and keeps that answer', async () => {
     const html = new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })
@@ -155,12 +172,18 @@ describe('createDataSource', () => {
       .mockResolvedValueOnce(new Response('', { status: 503 }))
       .mockResolvedValue(json(index))
     const ds = createDataSource('/data/x/', fetchFn)
-    await expect(ds.detectionsIndex()).rejects.toThrow(/Failed to fetch/)
+    await expect(ds.detectionsIndex()).rejects.toThrow(/detections\/index.json \(network error\)/)
     await expect(ds.detectionsIndex()).rejects.toThrow(/HTTP 503/)
     expect(await ds.detectionsIndex()).toEqual(index)
     expect(await ds.detectionsIndex()).toEqual(index)
     expect(fetchFn).toHaveBeenCalledTimes(3)
-    expect(fetchFn).toHaveBeenLastCalledWith('/data/x/detections/index.json')
+    expect(fetchFn.mock.lastCall?.[0]).toBe('/data/x/detections/index.json')
+  })
+  it('rejects a detections file whose lists are missing or of different lengths', async () => {
+    const good = { region: 'aa', year: 2020, lon0: 0, lat0: 0, s: [0], d: [1], x: [2], y: [3], w: [100], h: [100], p: [12], t: [0], c: [80], q: [0] }
+    expect(await createDataSource('/', async () => json(good)).detections('aa', 2020)).toEqual(good)
+    await expect(createDataSource('/', async () => json({ ...good, t: [] })).detections('aa', 2020)).rejects.toThrow(/equal length/)
+    await expect(createDataSource('/', async () => json({})).detections('aa', 2020)).rejects.toThrow(/detections\/aa\/2020.json needs lists/)
   })
   it('does not cache an unsorted cell file as good', async () => {
     const bad: CellFile = { ...FIX_CELLS_AA, entries: [1, 0, 1, 1, 0, 0, 0, 0, 3, 3, 0, 0] }
@@ -180,5 +203,27 @@ describe('createDataSource', () => {
   it('returns a reported.json that is there', async () => {
     const file = { mock: false, series: [] }
     expect(await createDataSource('/', async () => json(file)).reported()).toEqual(file)
+  })
+})
+
+describe('validateRegions and validateOutlines', () => {
+  const realManifest = () => validateManifest(realFile('manifest.json')) as Manifest
+  it('accept the real files', () => {
+    const m = realManifest()
+    expect(Object.keys(validateRegions(realFile('regions.json'), m).series)).toEqual(expect.arrayContaining(m.regions.map((r) => r.id)))
+    expect(validateOutlines(realFile('outlines.json')).features.length).toBeGreaterThan(0)
+  })
+  it('reject valid JSON of the wrong shape (it used to blank the page)', () => {
+    const m = realManifest()
+    expect(() => validateRegions({}, m)).toThrow(/no series/)
+    expect(() => validateRegions([], m)).toThrow(/not a JSON object/)
+    expect(() => validateOutlines({})).toThrow(/FeatureCollection/)
+    expect(() => validateOutlines({ type: 'FeatureCollection', features: [{ type: 'Feature', properties: {}, geometry: null }] })).toThrow(/feature 0/)
+  })
+  it('rejects a region series with missing months', () => {
+    const m = realManifest()
+    const rf = structuredClone(realFile('regions.json')) as { series: Record<string, { harmonized: number[] }> }
+    rf.series[m.regions[0].id].harmonized.pop()
+    expect(() => validateRegions(rf, m)).toThrow(/must have \d+ months/)
   })
 })

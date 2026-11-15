@@ -70,7 +70,8 @@ export function buildCountScale(
       if (log.length > thresholds.length) thresholds = log
     }
   }
-  const edges = [min, ...thresholds]
+  // Nothing above zero: no bins at all (the legend then shows only the zero swatch).
+  const edges = pos.length === 0 ? [] : [min, ...thresholds]
   const interp = PALETTES[opts.palette].interpolate
   const n = edges.length
   const colors = edges.map((_, i) => interp(0.2 + 0.78 * (n === 1 ? 1 : i / (n - 1))))
@@ -82,7 +83,13 @@ export function buildCountScale(
   }
   // Converted values can be tiny (0.02): the lowest bin then starts at "more than 0", not at a printed 0.
   const low = (v: number, i: number) => (i === 0 && v === 0 ? 'more than 0' : fmtCount(v))
-  const labels = edges.map((lo, i) => (i + 1 < n ? `${low(lo, i)} to <${fmtCount(edges[i + 1])}` : `${low(lo, i)} to ${fmtCount(max)}`))
+  const top = displayRound(max)
+  const labels = edges.map((lo, i) => {
+    if (i + 1 < n) return `${low(lo, i)} to <${fmtCount(edges[i + 1])}`
+    // Last bin: when the largest value prints no higher than the lower bound, say it once instead of "5 to 5" or "0 to 0".
+    if (top <= lo) return lo === 0 ? 'more than 0 to <0.1' : fmtCount(lo)
+    return `${low(lo, i)} to ${fmtCount(max)}`
+  })
   return {
     edges, max, colors, labels, binOf,
     colorOf: (v) => (v === null ? NO_DATA_FILL : v <= 0 ? ZERO_FILL : colors[binOf(v)]),

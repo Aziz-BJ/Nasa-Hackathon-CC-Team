@@ -14,7 +14,7 @@ export function DetectionsLegend({ selection, state, loading, error, onRetry }: 
     <div className="legend-detections">
       <div className="small">{title}</div>
       {error ? <span className="small error" role="alert">
-          {error}{onRetry && <>{' '}<button type="button" className="btn" onClick={onRetry}>Try again</button></>}
+          {error}{onRetry && <>{' '}<button type="button" className="btn btn-inline" onClick={onRetry}>Try again</button></>}
         </span>
         : loading || !selection ? <span className="small muted">Loading detections…</span>
         : <>

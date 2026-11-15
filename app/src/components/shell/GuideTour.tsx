@@ -1,5 +1,5 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// Short step-by-step guide. Opens on the first visit; the Guide button reopens it.
+// Short step-by-step guide. Opens every time the app is opened; the Guide button reopens it.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 
 export interface GuideStep {
@@ -7,16 +7,6 @@ export interface GuideStep {
   target: string | null
   title: string
   text: string
-}
-
-export const GUIDE_SEEN_KEY = 'hotspot-calendar-guide-seen'
-
-export function guideSeen(): boolean {
-  try { return localStorage.getItem(GUIDE_SEEN_KEY) === '1' } catch { return false }
-}
-
-export function markGuideSeen() {
-  try { localStorage.setItem(GUIDE_SEEN_KEY, '1') } catch { /* private mode: the guide may show again */ }
 }
 
 const CARD_W = 320
@@ -51,15 +41,21 @@ export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () 
   const [opener] = useState(() => document.activeElement as HTMLElement | null)
   useEffect(() => () => opener?.focus?.(), [opener])
   useEffect(() => { cardRef.current?.focus() }, [i])
-
-  function onKey(e: KeyboardEvent<HTMLDivElement>) {
-    if (e.key === 'Escape') {
-      // The guide is on top: Esc closes only the guide, not a drawer underneath.
+  // The guide is on top: Esc closes only the guide, not a drawer underneath, wherever focus is (a click outside the card
+  // moves it to the page). Listening on window in the capture phase runs before the drawer's own Escape handler.
+  useEffect(() => {
+    const onEsc = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return
       e.preventDefault()
       e.stopPropagation()
       onClose()
     }
-    else if (e.key === 'ArrowRight' && !last) setI(i + 1)
+    window.addEventListener('keydown', onEsc, { capture: true })
+    return () => window.removeEventListener('keydown', onEsc, { capture: true })
+  }, [onClose])
+
+  function onKey(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === 'ArrowRight' && !last) setI(i + 1)
     else if (e.key === 'ArrowLeft' && i > 0) setI(i - 1)
     else if (e.key === 'Tab') {
       // Keep focus inside the guide card while it is open.
@@ -73,7 +69,9 @@ export function GuideTour({ steps, onClose }: { steps: GuideStep[]; onClose: () 
   }
 
   return (
-    <div className="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" onKeyDown={onKey}>
+    <div className="tour" role="dialog" aria-modal="true" aria-labelledby="tour-title" onKeyDown={onKey}
+      // A click beside the card must not move focus out of the guide (to the page behind it).
+      onMouseDown={(e) => { if (!cardRef.current?.contains(e.target as Node)) e.preventDefault() }}>
       {rect
         ? <div className="tour-ring" style={{ left: rect.left - 6, top: rect.top - 6, width: rect.width + 12, height: rect.height + 12 }} />
         : <div className="tour-dim" />}
