@@ -383,3 +383,7 @@ label.indent { padding-left: 1.4rem; }
   width: max-content; max-width: min(34rem, calc(100vw - 2 * var(--rail-w) - 40px)); margin: 0; padding: 0.55rem 0.9rem;
   border-radius: var(--r-m); background: var(--glass-strong); color: var(--label); font-size: 0.8125rem; text-align: center; box-shadow: var(--shadow); }
 .btn-inline { padding: 0.15rem 0.6rem; margin-left: 0.25rem; font-size: 0.8125rem; vertical-align: baseline; min-height: 24px; }
+
+/* Charts (Observable Plot): the hover box and text halos use --plot-background, which Plot sets to white on each chart's
+   svg. On our dark cards that put the light chart text on a white box, so give the box a dark card colour instead. */
+svg[class^="plot-"] { --plot-background: #2c2c2e; }

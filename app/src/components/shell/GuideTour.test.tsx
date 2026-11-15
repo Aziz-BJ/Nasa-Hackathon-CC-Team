@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Drawer } from './Drawer'
-import { cardStyle, GuideTour, guideSeen, markGuideSeen } from './GuideTour'
+import { cardStyle, GuideTour } from './GuideTour'
 
 const steps = [
   { target: null, title: 'Welcome', text: 'Intro' },
@@ -30,12 +30,6 @@ describe('GuideTour', () => {
     await userEvent.keyboard('{Escape}')
     await userEvent.click(screen.getByRole('button', { name: 'Skip guide' }))
     expect(onClose).toHaveBeenCalledTimes(2)
-  })
-  it('remembers that the guide was seen', () => {
-    localStorage.clear()
-    expect(guideSeen()).toBe(false)
-    markGuideSeen()
-    expect(guideSeen()).toBe(true)
   })
   it('gives focus back on close, and its Esc does not close a drawer underneath', async () => {
     const onGuideClose = vi.fn()

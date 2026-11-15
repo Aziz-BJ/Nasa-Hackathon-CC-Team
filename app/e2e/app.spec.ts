@@ -18,9 +18,9 @@ async function openPanel(page: Page, name: string) {
 
 test.describe('app', () => {
   test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => localStorage.setItem('hotspot-calendar-guide-seen', '1'))
     await page.goto('/')
     await expect(headline(page)).toContainText('fire cell-days')
+    await page.getByRole('button', { name: 'Skip guide' }).click() // it opens on every visit
   })
 
   test('loads real data with no login and no mock banner', async ({ page }) => {
@@ -236,16 +236,20 @@ test.describe('app', () => {
   })
 })
 
-test('the guide opens on the first visit and can be reopened', async ({ page }) => {
+test('the guide opens every time the app is opened, from a shared link too, and can be reopened', async ({ page, context }) => {
   await page.goto('/')
   await expect(page.getByRole('dialog')).toContainText('Step 1 of')
   await page.getByRole('button', { name: 'Next' }).click()
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Fire cell-days' })).toBeVisible()
   await page.getByRole('button', { name: 'Skip guide' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.reload()
-  await expect(headline(page)).toContainText('fire cell-days')
-  await expect(page.getByRole('dialog')).toHaveCount(0)
-  await page.getByRole('button', { name: 'Guide' }).click()
-  await expect(page.getByRole('dialog')).toContainText('Step 1 of')
+  // Opening the app again in the same browser, here from a shared link, shows the guide again.
+  const again = await context.newPage()
+  await again.goto('/#area=region:sardinia&from=2021-07&to=2021-08&src=harmonized')
+  await expect(again.getByRole('dialog')).toContainText('Step 1 of')
+  await again.getByRole('button', { name: 'Skip guide' }).click()
+  await expect(again.getByRole('dialog')).toHaveCount(0)
+  await expect(headline(again)).toContainText('fire cell-days')
+  await again.getByRole('button', { name: 'Guide' }).click()
+  await expect(again.getByRole('dialog')).toContainText('Step 1 of')
 })

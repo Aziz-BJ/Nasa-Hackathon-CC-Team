@@ -17,7 +17,7 @@ import { MockBanner } from './components/MockBanner'
 import { BottomStrip } from './components/shell/BottomStrip'
 import { Drawer } from './components/shell/Drawer'
 import { FeatureRail, type FeatureBox } from './components/shell/FeatureRail'
-import { GuideTour, guideSeen, markGuideSeen, type GuideStep } from './components/shell/GuideTour'
+import { GuideTour, type GuideStep } from './components/shell/GuideTour'
 import { TopBar } from './components/shell/TopBar'
 import { TimeRangePicker } from './components/TimeRangePicker'
 import { RAMP } from './config'
@@ -148,7 +148,8 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   // What each drawer shows. Kept after closing so the drawer slides out with its content.
   const [shown, setShown] = useState<Record<Side, string | null>>({ left: null, right: s.view === 'about' ? 'about' : null })
   const [more, setMore] = useState(false)
-  const [guide, setGuide] = useState(() => !guideSeen())
+  // The guide opens every time the app is opened (a shared link included); the Guide button reopens it.
+  const [guide, setGuide] = useState(true)
   useEffect(() => setHoverMonth(null), [s.area, s.source])
 
   const chooseRegion = useCallback((key: string) => {
@@ -389,7 +390,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
     { target: 'strip', title: 'Legend and summary', text: 'What the colours mean. Press More info for the verdict, the 90% range and the CSV download.' },
     { target: 'guide', title: 'Guide', text: 'Open this guide again any time.' },
   ]
-  const closeGuide = () => { markGuideSeen(); setGuide(false) }
+  const closeGuide = () => setGuide(false)
   const onMapUnavailable = useCallback(() => { setMapFailed(true); dispatch({ type: 'setTool', tool: 'pan' }) }, [])
 
   // Escape while a drawing tool is on cancels the drawing and goes back to moving the globe; the drawer stays open,

@@ -5,7 +5,6 @@ import { expect, test, type Page } from '@playwright/test'
 test.beforeEach(async ({ context, page }) => {
   // Never load the real tile hosts from tests; the globe stays black and every control still works.
   await context.route((u) => u.hostname !== 'localhost', (r) => r.abort())
-  await page.addInitScript(() => localStorage.setItem('hotspot-calendar-guide-seen', '1'))
 })
 
 interface Vp { width: number; height: number }
@@ -14,6 +13,9 @@ async function load(page: Page, vp: Vp, hash = '/') {
   await page.setViewportSize(vp)
   await page.goto(hash)
   await expect(page.locator('.strip-headline')).toContainText('fire cell-days')
+  // The guide opens on every full page load (not when only the link after # changes).
+  const skip = page.getByRole('button', { name: 'Skip guide' })
+  if (await skip.count()) await skip.click()
 }
 async function settleStrip(page: Page) {
   await page.waitForFunction(() => {

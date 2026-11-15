@@ -1,5 +1,5 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// Short step-by-step guide. Opens on the first visit; the Guide button reopens it.
+// Short step-by-step guide. Opens every time the app is opened; the Guide button reopens it.
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 
 export interface GuideStep {
@@ -7,16 +7,6 @@ export interface GuideStep {
   target: string | null
   title: string
   text: string
-}
-
-export const GUIDE_SEEN_KEY = 'hotspot-calendar-guide-seen'
-
-export function guideSeen(): boolean {
-  try { return localStorage.getItem(GUIDE_SEEN_KEY) === '1' } catch { return false }
-}
-
-export function markGuideSeen() {
-  try { localStorage.setItem(GUIDE_SEEN_KEY, '1') } catch { /* private mode: the guide may show again */ }
 }
 
 const CARD_W = 320
