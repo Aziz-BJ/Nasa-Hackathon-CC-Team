@@ -39,7 +39,7 @@ export function KpiRow(p: KpiRowProps) {
   const f = p.focus
   const partial = p.focusStatus === 'partial'
   const calName = MONTH_LONG[parseYm(f.month).month - 1]
-  const what = partial ? `${p.focusLabel.split(' ').slice(0, 2).join(' ')}s` : `${calName}s`
+  const what = partial ? `years (same days)` : `${calName}s`
   const n = f.baseline?.values.length ?? 0
   const [y0, y1] = p.baselineYears
   const ytd = partial ? null : p.ytd

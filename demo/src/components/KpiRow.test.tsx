@@ -96,7 +96,7 @@ describe('KpiRow, the unfinished month', () => {
   it('uses the range of the days so far', () => {
     render(<KpiRow {...partial()} />)
     expect(screen.getByText('90% range 70 to 95')).toBeInTheDocument()
-    expect(screen.getByText(/100th percentile of 3 1–13 Novembers/)).toBeInTheDocument()
+    expect(screen.getByText(/100th percentile of 3 years \(same days\)/)).toBeInTheDocument()
   })
   it('hides the year to date until the month is complete', () => {
     render(<KpiRow {...partial()} />)
