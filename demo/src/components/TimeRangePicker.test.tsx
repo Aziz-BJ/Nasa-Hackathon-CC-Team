@@ -6,15 +6,15 @@ import { TimeRangePicker } from './TimeRangePicker'
 
 const props = {
   first: '2000-11', last: '2026-11', from: '2000-11', to: '2026-11',
-  quick: [{ label: 'Last 12 months', from: '2025-12', to: '2026-11' }],
 }
 
 describe('TimeRangePicker', () => {
-  it('applies a quick range', async () => {
-    const onChange = vi.fn()
-    render(<TimeRangePicker {...props} onChange={onChange} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Last 12 months' }))
-    expect(onChange).toHaveBeenCalledWith('2025-12', '2026-11')
+  it('shows the chosen range and its length above the bar', () => {
+    render(<TimeRangePicker {...props} from="2022-01" to="2026-10" onChange={vi.fn()} />)
+    expect(screen.getByText('Jan 2022 – Oct 2026')).toBeInTheDocument()
+    expect(screen.getByText('58 months')).toBeInTheDocument()
+    expect(screen.getByRole('slider', { name: 'Start month' })).toHaveAttribute('aria-valuetext', 'Jan 2022')
+    expect(screen.queryByRole('button', { name: /Last 12 months/ })).toBeNull()
   })
   it('changes the start year by hand and clamps to the data', async () => {
     const onChange = vi.fn()

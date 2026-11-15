@@ -81,7 +81,9 @@ test.describe('app', () => {
 
   test('changing months rescales the calendar and keyboard moves between months', async ({ page }) => {
     await openPanel(page, 'Dates')
-    await page.getByRole('button', { name: 'Last 5 years' }).click()
+    await page.getByRole('button', { name: 'Enter dates manually' }).click()
+    await page.getByLabel('From year').selectOption('2022')
+    await page.getByLabel('From month').selectOption('1')
     await openPanel(page, 'Calendar')
     await expect(page.getByText(/bins fit Jan 2022 to Oct 2026/)).toBeVisible()
     await page.mouse.move(0, 0) // hover also updates the detail line; keep the pointer out of the way
@@ -93,7 +95,10 @@ test.describe('app', () => {
 
   test('CSV download has provenance and one row per month', async ({ page }) => {
     await openPanel(page, 'Dates')
-    await page.getByRole('button', { name: 'Last 12 months' }).click()
+    await page.getByRole('button', { name: 'Enter dates manually' }).click()
+    await page.getByLabel('From year').selectOption('2025')
+    await page.getByLabel('From month').selectOption('11')
+    await expect(page.locator('.range-value')).toHaveText('Nov 2025 – Oct 2026')
     await openPanel(page, 'Download')
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV' }).click()])
     const text = readFileSync((await download.path())!, 'utf8')

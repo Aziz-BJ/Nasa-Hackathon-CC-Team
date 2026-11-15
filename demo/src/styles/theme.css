@@ -176,7 +176,6 @@ details > summary { cursor: pointer; color: var(--accent); font-weight: 600; mar
 .range-ticks span { position: absolute; transform: translateX(-50%); }
 .range-ticks span:first-child { transform: none; }
 .range-ticks span:last-child { transform: translateX(-100%); }
-.range-picker .chips { margin-top: 0.9rem; }
 
 /* ---------- Bottom strip: legend, one-line verdict, More info ---------- */
 .strip { position: fixed; left: 50%; transform: translateX(-50%); bottom: 10px; z-index: 20; width: min(1000px, calc(100vw - 20px)); border-radius: var(--r-l);

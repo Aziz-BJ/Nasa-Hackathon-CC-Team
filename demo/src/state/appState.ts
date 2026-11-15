@@ -2,7 +2,7 @@
 import type { Basemap, DrawTool } from '../components/GlobeMap'
 import type { Area } from '../lib/area'
 import type { PaletteId } from '../lib/colorScale'
-import { addMonths, formatYm, parseYm, type YearMonth } from '../lib/months'
+import { addMonths, type YearMonth } from '../lib/months'
 import type { Manifest, SeriesKey } from '../lib/types'
 import { applyUrl, type UrlState } from './urlState'
 
@@ -67,21 +67,4 @@ export function reducer(s: AppState, a: Action): AppState {
     case 'setView': return { ...s, view: a.view }
     case 'applyUrl': return applyUrl(a.manifest, a.url, s)
   }
-}
-
-export interface QuickRange { label: string; from: YearMonth; to: YearMonth }
-
-/** One-click ranges. All end at the latest complete month. */
-export function quickRanges(m: Manifest): QuickRange[] {
-  const last = lastComplete(m)
-  const first = m.harmonized_coverage[0]
-  const clamp = (ym: YearMonth) => (ym < first ? first : ym)
-  const { year } = parseYm(last)
-  return [
-    { label: 'Last 12 months', from: clamp(addMonths(last, -11)), to: last },
-    { label: 'This year', from: clamp(formatYm(year, 1)), to: last },
-    { label: 'Last 5 years', from: clamp(formatYm(year - 4, 1)), to: last },
-    { label: 'VIIRS era (2012 on)', from: clamp('2012-01'), to: last },
-    { label: 'Whole record', from: first, to: last },
-  ]
 }

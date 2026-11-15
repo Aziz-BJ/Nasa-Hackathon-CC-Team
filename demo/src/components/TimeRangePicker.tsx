@@ -4,7 +4,6 @@ import { useId, useMemo, useState } from 'react'
 import { RAMP } from '../config'
 import { buildCountScale, type PaletteId } from '../lib/colorScale'
 import { formatYm, labelYm, MONTH_LONG, monthsBetween, parseYm, type YearMonth } from '../lib/months'
-import type { QuickRange } from '../state/appState'
 import { MonthRangeSlider } from './MonthRangeSlider'
 
 export interface TimeRangePickerProps {
@@ -12,7 +11,6 @@ export interface TimeRangePickerProps {
   last: YearMonth
   from: YearMonth
   to: YearMonth
-  quick: QuickRange[]
   onChange: (from: YearMonth, to: YearMonth) => void
   /** Hotspots per month for the chosen area, from \`first\` to \`last\`, drawn as the bar's colours. */
   activity?: (number | null)[]
@@ -44,7 +42,7 @@ function MonthSelect({ label, value, first, last, onChange }: {
   )
 }
 
-export function TimeRangePicker({ first, last, from, to, quick, onChange, activity, palette = 'inferno' }: TimeRangePickerProps) {
+export function TimeRangePicker({ first, last, from, to, onChange, activity, palette = 'inferno' }: TimeRangePickerProps) {
   const [manual, setManual] = useState(false)
   const colors = useMemo(() => {
     if (!activity) return undefined
@@ -71,14 +69,7 @@ export function TimeRangePicker({ first, last, from, to, quick, onChange, activi
           <MonthSelect label="To" value={to} first={first} last={last} onChange={(ym) => onChange(from, ym)} />
         </div>
       )}
-      <div className="chips" aria-label="Quick ranges">
-        {quick.map((q) => (
-          <button key={q.label} type="button" className="btn" aria-pressed={q.from === from && q.to === to} onClick={() => onChange(q.from, q.to)}>
-            {q.label}
-          </button>
-        ))}
-      </div>
-      <p className="small muted">Drag the handles or use the arrow keys. The bar shows hotspots per month for this area. All months are UTC; colours rescale to the months you choose.</p>
+      <p className="small muted">Drag the handles or use the arrow keys. The bar shows this area's hotspots per month (UTC).</p>
     </div>
   )
 }

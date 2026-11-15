@@ -37,7 +37,7 @@ import { cellsToFeatures, EMPTY_FC, overviewToFeatures } from './lib/mapFeatures
 import { labelYm, longLabelYm, monthRange, parseYm, type YearMonth } from './lib/months'
 import { monthStatus, sensorsIn } from './lib/status'
 import { SERIES_LABELS, type Manifest, type SeriesKey } from './lib/types'
-import { initialState, quickRanges, reducer, type AppState } from './state/appState'
+import { initialState, reducer, type AppState } from './state/appState'
 import { applyUrl, parseHash, toHash } from './state/urlState'
 
 export default function App() {
@@ -136,7 +136,7 @@ function Explorer({ manifest: m, overview, reported }: { manifest: Manifest } & 
     { id: 'dates', side: 'left', label: 'Dates', icon: <CalendarBlank aria-hidden />, title: 'Choose months',
       guide: 'Choose the months to look at. Colours rescale to the months you pick.',
       body: () => <TimeRangePicker first={m.harmonized_coverage[0]} last={m.last_month} from={s.from} to={s.to}
-        quick={quickRanges(m)} onChange={(from, to) => dispatch({ type: 'setRange', from, to })}
+        onChange={(from, to) => dispatch({ type: 'setRange', from, to })}
         activity={activity} palette={s.palette} /> },
     { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
       guide: 'Switch between the harmonized record and raw MODIS or VIIRS, and change colours, imagery and labels.',

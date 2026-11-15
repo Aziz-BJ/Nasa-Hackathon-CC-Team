@@ -9,7 +9,7 @@ It runs on **synthetic mock data** (red banner) until the real FIRMS pipeline ou
 ## What you can do
 
 - **Area:** a preset region, a circle, rectangle, polygon or freehand shape drawn on the globe, or typed coordinates (box or point + radius).
-- **Dates:** drag the two handles on a 2000–2026 bar coloured by the area's monthly hotspots, pick a quick range, or type months.
+- **Dates:** drag the two handles on a 2000–2026 bar coloured by the area's monthly hotspots, or type months (pencil button).
 - **Layers:** harmonized record or raw MODIS / VIIRS S-NPP / VIIRS NOAA-20, colour ramp (inferno or cividis), day or night imagery, labels.
 - **Calendar:** years × months burning calendar with year totals and the typical-year row; keyboard and table view.
 - **Trends:** the chosen year against a typical year, and monthly anomalies against the multi-year average or median.
@@ -23,7 +23,7 @@ It runs on **synthetic mock data** (red banner) until the real FIRMS pipeline ou
 ```bash
 npm install
 npm run dev          # generates mock data, starts http://localhost:5173
-npm test             # unit tests (Vitest), 74
+npm test             # unit tests (Vitest), 73
 npm run test:e2e     # end-to-end + accessibility on desktop and phone (Playwright), 25
 npm run build:demo   # static build WITH mock data and the red banner
 npm run build        # production build: refuses mock data
