@@ -1,7 +1,8 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 import { describe, expect, it } from 'vitest'
 import type { Area } from './area'
-import { daySpan, DETECTIONS_OFF, selectDetections, yearsToLoad } from './detections'
+import { FIX_MANIFEST } from '../test/fixtures'
+import { daySpan, DETECTIONS_OFF, HOTSPOT_COLUMNS, hotspotsCsv, hotspotsFilename, selectDetections, yearsToLoad } from './detections'
 import type { DetectionsFile } from './types'
 
 const ALL = { ...DETECTIONS_OFF, show: true }
@@ -16,6 +17,9 @@ const FILE: DetectionsFile = {
   w: [100, 100, 39, 39, 39],
   h: [100, 100, 36, 36, 36],
   p: [20, 5, 3, 2, 1],
+  t: [12 * 60 + 30, -60, 13 * 60, 60, 0], // the 2nd was seen at 23:00 UTC the day before
+  c: [80, 45, 2, 3, 2],
+  q: [0, 0, 0, 0, 1],
 }
 const square = (w: number, s: number, e: number, n: number): GeoJSON.Polygon =>
   ({ type: 'Polygon', coordinates: [[[w, s], [e, s], [e, n], [w, n], [w, s]]] })
@@ -68,5 +72,37 @@ describe('yearsToLoad', () => {
   it('picks the years of the chosen months that have a file', () => {
     expect(yearsToLoad(['2019', '2020', '2021', '2018'], '2019-06', '2020-02')).toEqual([2019, 2020])
     expect(yearsToLoad(['2019'], '2021-01', '2021-12')).toEqual([])
+  })
+})
+
+describe('hotspotsCsv', () => {
+  const out = hotspotsCsv(FIX_MANIFEST, [FILE], REGION, '2020-01', '2020-12', new Date('2026-11-15T12:00:00Z'))
+  const lines = out.csv.trim().split('\n')
+  const rows = lines.filter((l) => !l.startsWith('#')).slice(1).map((l) => l.split(','))
+  const col = (r: string[], name: (typeof HOTSPOT_COLUMNS)[number]) => r[HOTSPOT_COLUMNS.indexOf(name)]
+
+  it('has one row per detection, with the FIRMS fields decoded', () => {
+    expect(out.rows).toBe(5)
+    expect(out.counts).toEqual([2, 2, 1])
+    expect(rows).toHaveLength(5)
+    const [aquaDay, aquaNight, , , noaa] = rows
+    expect([col(aquaDay, 'latitude'), col(aquaDay, 'longitude')]).toEqual(['0.5000', '0.5000'])
+    expect([col(aquaDay, 'acq_date_utc'), col(aquaDay, 'acq_time_utc'), col(aquaDay, 'local_solar_date')]).toEqual(['2020-01-11', '1230', '2020-01-11'])
+    expect([col(aquaNight, 'acq_date_utc'), col(aquaNight, 'acq_time_utc'), col(aquaNight, 'local_solar_date')]).toEqual(['2020-02-14', '2300', '2020-02-15'])
+    expect([col(aquaNight, 'satellite'), col(aquaNight, 'instrument'), col(aquaNight, 'daynight'), col(aquaNight, 'confidence')]).toEqual(['Aqua', 'MODIS', 'N', '45'])
+    expect([col(noaa, 'satellite'), col(noaa, 'confidence'), col(noaa, 'data_version'), col(noaa, 'local_solar_date')]).toEqual(['NOAA-20', 'n', 'NRT', '2020-12-31'])
+    expect([col(noaa, 'frp_mw'), col(noaa, 'scan_km'), col(noaa, 'track_km')]).toEqual(['1', '0.39', '0.36'])
+  })
+  it('says what the rows are and credits FIRMS in the header', () => {
+    expect(out.csv).toMatch(/NOT harmonized/)
+    expect(out.csv).toMatch(/We acknowledge the use of data and\/or imagery from NASA's Fire Information for Resource Management System \(FIRMS\)/)
+    expect(out.csv).toMatch(/"as is"/)
+    expect(out.csv).toMatch(/Not for tactical decisions/)
+    expect(out.csv).toMatch(/Detections: 5 \(Aqua MODIS 2, Suomi NPP VIIRS 2, NOAA-20 VIIRS 1\)/)
+  })
+  it('follows the area and months like the map layer', () => {
+    expect(hotspotsCsv(FIX_MANIFEST, [FILE], WEST, '2020-01', '2020-12').rows).toBe(3)
+    expect(hotspotsCsv(FIX_MANIFEST, [FILE], REGION, '2021-01', '2021-12').rows).toBe(0)
+    expect(hotspotsFilename(REGION, '2020-01', '2020-12')).toBe('hotspots_region-a_2020-01_2020-12.csv')
   })
 })

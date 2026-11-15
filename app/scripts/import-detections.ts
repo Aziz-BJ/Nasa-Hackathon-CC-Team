@@ -23,7 +23,8 @@ if (!parquet) {
 const out = args.get('out') ?? join(root, 'public/data/real/detections')
 const manifest = JSON.parse(readFileSync(join(root, 'public/data/real/manifest.json'), 'utf8')) as { last_day: string }
 
-const COLUMNS = ['latitude', 'longitude', 'scan', 'track', 'satellite', 'frp', 'date_local', 'daynight', 'region']
+const COLUMNS = ['latitude', 'longitude', 'scan', 'track', 'satellite', 'frp', 'date_local', 'daynight', 'region',
+  'acq_date', 'acq_time', 'confidence', 'data_version']
 const file = await asyncBufferFromFile(parquet)
 const all = (await parquetReadObjects({ file, columns: COLUMNS })) as unknown as DetectionRow[]
 const rows = all.filter((r) => keepRow(r, manifest.last_day))

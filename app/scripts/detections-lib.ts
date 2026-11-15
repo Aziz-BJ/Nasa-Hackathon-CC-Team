@@ -18,6 +18,13 @@ export interface DetectionRow {
   date_local: string
   daynight: string
   region: string
+  /** FIRMS acquisition date and time, UTC (YYYY-MM-DD and HHMM). */
+  acq_date: string
+  acq_time: string
+  /** FIRMS confidence: MODIS 0-100 (as text), VIIRS l / n / h. */
+  confidence: string
+  /** SP (standard processing) or NRT (near real-time, provisional). */
+  data_version: string
 }
 
 /** One region-year. Arrays are parallel; see the data contract for units. */
@@ -38,6 +45,12 @@ export interface DetectionsFileOut {
   h: number[]
   /** Fire radiative power, MW, rounded. */
   p: number[]
+  /** UTC acquisition time in minutes from 00:00 UTC of the local solar date (can be negative). */
+  t: number[]
+  /** Confidence: MODIS 0-100; VIIRS 1 low, 2 nominal, 3 high. */
+  c: number[]
+  /** 1 = near real-time (provisional), 0 = standard processing. */
+  q: number[]
 }
 
 export function dayOfYear(date: string): number {
@@ -49,6 +62,27 @@ export function satelliteCode(satellite: string, daynight: string): number {
   const i = SATELLITES.indexOf(satellite as Satellite)
   if (i < 0) throw new Error(`Unknown satellite "${satellite}"`)
   return i * 2 + (daynight === 'N' ? 1 : 0)
+}
+
+const VIIRS_CONFIDENCE: Record<string, number> = { l: 1, low: 1, n: 2, nominal: 2, h: 3, high: 3 }
+
+/** FIRMS confidence as a number: MODIS keeps its 0-100 percentage, VIIRS l/n/h becomes 1/2/3. */
+export function confidenceCode(satellite: string, confidence: string): number {
+  if (satellite === 'AQUA') {
+    const v = Number(confidence)
+    if (!Number.isFinite(v)) throw new Error(`Bad MODIS confidence "${confidence}"`)
+    return Math.round(v)
+  }
+  const v = VIIRS_CONFIDENCE[confidence.trim().toLowerCase()]
+  if (!v) throw new Error(`Bad VIIRS confidence "${confidence}"`)
+  return v
+}
+
+/** Minutes from 00:00 UTC of the local date to the UTC acquisition time (acq_date may be the day before). */
+export function utcMinutes(dateLocal: string, acqDate: string, acqTime: string): number {
+  const day = (d: string) => { const [y, m, dd] = d.split('-').map(Number); return Date.UTC(y, m - 1, dd) / 60_000 }
+  const hhmm = acqTime.padStart(4, '0')
+  return day(acqDate) - day(dateLocal) + Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(2, 4))
 }
 
 /** Rows dated after lastDay (an incomplete day) are dropped, as in the harmonized record. */
@@ -71,11 +105,15 @@ export function encodeRegionYear(region: string, year: number, rows: DetectionRo
     w: Math.round(r.scan * 100),
     h: Math.round(r.track * 100),
     p: Math.round(r.frp),
+    t: utcMinutes(r.date_local, r.acq_date, r.acq_time),
+    c: confidenceCode(r.satellite, r.confidence),
+    q: r.data_version === 'NRT' ? 1 : 0,
   }))
   enc.sort((a, b) => a.d - b.d || a.s - b.s || a.x - b.x || a.y - b.y)
-  const out: DetectionsFileOut = { region, year, lon0, lat0, s: [], d: [], x: [], y: [], w: [], h: [], p: [] }
+  const out: DetectionsFileOut = { region, year, lon0, lat0, s: [], d: [], x: [], y: [], w: [], h: [], p: [], t: [], c: [], q: [] }
   for (const e of enc) {
     out.s.push(e.s); out.d.push(e.d); out.x.push(e.x); out.y.push(e.y); out.w.push(e.w); out.h.push(e.h); out.p.push(e.p)
+    out.t.push(e.t); out.c.push(e.c); out.q.push(e.q)
   }
   return out
 }

@@ -83,6 +83,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
       <p>
         An optional layer (Layers, "Detections at native pixel size") shows every cleaned detection instead, coloured by satellite and sized like its pixel
         when zoomed in. It is the raw data before harmonizing: VIIRS sees many more, smaller fires than Aqua MODIS, so the dots are not comparable between sensors.
+        The Download panel offers the same detections as a CSV, one row per hotspot, with its UTC time, satellite, confidence and fire radiative power.
       </p>
 
       <h2>How the comparisons work</h2>

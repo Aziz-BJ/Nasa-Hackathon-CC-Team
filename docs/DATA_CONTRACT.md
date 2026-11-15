@@ -37,7 +37,7 @@ and raw counts matched in 1,172 of 1,172 region-months.
 | `cells/<region>.json` | 0.1 to 2 MB (1 MB gzipped in all) | when an area touches the region |
 | `reported.json` | optional (shipped empty) | ground-reported fires; the Reported panel shows only for regions listed in it |
 | `detections/index.json` | 5 KB | at start (optional: without it, the detections switch is disabled) |
-| `detections/<region>/<year>.json` | 43 MB in all, 100 files; California 2020 is the largest (2.0 MB gzipped) | only while the detections layer is on, for the regions the area touches and the years of the chosen months |
+| `detections/<region>/<year>.json` | 57 MB in all (about 11 MB gzipped), 100 files; California 2020 is the largest (2.1 MB gzipped) | while the detections layer is on, or for the hotspots CSV, for the regions the area touches and the years of the chosen months |
 
 ### manifest.json
 
@@ -142,6 +142,14 @@ rewrites the folder. On the 15 Nov run: 1,631,147 rows read, 25 dated 14 Nov 202
 | `x`, `y` | offsets from `lon0` / `lat0` in 1e-4 degrees (about 10 m), so longitude = `lon0 + x / 1e4` |
 | `w`, `h` | FIRMS `scan` and `track` pixel sizes in units of 10 m (km × 100) |
 | `p` | fire radiative power, MW, rounded |
+| `t` | FIRMS acquisition time (UTC) in minutes from 00:00 UTC of the local solar date; negative when the pass was on the UTC day before |
+| `c` | FIRMS confidence: MODIS 0-100 (%); VIIRS 1 low, 2 nominal, 3 high (low is removed by the cleaning) |
+| `q` | 1 = near real-time (NRT, provisional), 0 = standard processing (SP) |
+
+The Download panel turns the same files into a CSV of hotspots for the chosen area and months (`hotspotsCsv` in `app/src/lib/detections.ts`):
+one row per detection with latitude, longitude, UTC date and time, local solar date, satellite, instrument, day/night, confidence,
+FRP, pixel size, SP/NRT and product, under a header with the cleaning steps, the FIRMS acknowledgement and the raw-data caveats.
+`checks/detections_recount.py` (outside the repo) rebuilt every row from the parquet with DuckDB: 1,631,122 of 1,631,122 match.
 
 The app keeps every row of a whole region's file and tests pixel centres against a drawn shape or typed box. Above 150,000 dots it thins
 the selection evenly and the key says how many are drawn. Each dot is drawn with a radius of half the pixel's scan width at the current

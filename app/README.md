@@ -19,7 +19,8 @@ Numbers are **fire cell-days** on the Aqua MODIS scale: 5 km squares with at lea
 - **Calendar:** years × months burning calendar with year totals and the typical-year row; incomplete, provisional and unfinished months marked; keyboard and table view.
 - **Trends:** the chosen year against a typical year (with its 90% range), and monthly anomalies against the multi-year median or mean.
 - **Sensors:** raw MODIS vs raw VIIRS vs harmonized, showing the false jump in a naive splice, and the region's conversion factors.
-- **Download:** CSV of the monthly numbers (range, source, raw counts, comparison) with a provenance header, SVG images of every chart, and a shareable link.
+- **Download:** CSV of the monthly numbers (range, source, raw counts, comparison) with a provenance header, CSV of every hotspot (raw
+  FIRMS detection) in the search, SVG images of every chart, and a shareable link.
 - **More info:** the verdict for the latest month (percentile, rank, difference from the median, robust z, year to date). The unfinished
   month is compared with the same days of earlier years.
 

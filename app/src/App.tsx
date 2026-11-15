@@ -34,7 +34,7 @@ import { areaFromRegion, validateDrawn } from './lib/area'
 import { buildCountScale, fmtCount, VERDICT_COLORS } from './lib/colorScale'
 import { buildCsv, csvFilename } from './lib/csv'
 import type { Outlines } from './lib/data'
-import { selectDetections, yearsToLoad } from './lib/detections'
+import { hotspotsCsv, hotspotsFilename, selectDetections, yearsToLoad } from './lib/detections'
 import { saveFile } from './lib/download'
 import { calendarMedians, compareWith, summarizeMonth, summarizeMtd, VERDICT_LABELS, yearToDate, type MonthSummary, type VerdictLevel } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, regionsToFeatures } from './lib/mapFeatures'
@@ -165,6 +165,17 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
     ? selectDetections(detReady, s.area, s.from, s.to, s.detections) : null),
   [detShow, s.area, s.from, s.to, s.detections, detReady])
 
+  // The hotspots CSV loads the same files as the layer, on demand, whether or not the layer is on.
+  const downloadHotspots = useCallback(async () => {
+    const area = s.area
+    if (!area || !detIndex) return 'Choose an area first.'
+    const keys = regionsTouching(m, area).flatMap((r) => yearsToLoad(Object.keys(detIndex.regions[r] ?? {}), s.from, s.to).map((y) => [r, y] as const))
+    const files = await Promise.all(keys.map(([r, y]) => dataSource.detections(r, y)))
+    const { csv, rows } = hotspotsCsv(m, files, area, s.from, s.to)
+    saveFile(hotspotsFilename(area, s.from, s.to), csv, 'text/csv;charset=utf-8')
+    return `Saved ${rows.toLocaleString('en-GB')} hotspots.`
+  }, [s.area, s.from, s.to, detIndex, m])
+
   // Every region tinted by its verdict for the last chosen month.
   const regionVerdicts = useMemo(() => {
     const out = new Map<string, MonthSummary>()
@@ -265,7 +276,8 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
       body: () => !ready ? needsArea : <ReportedChart reported={reportedForArea} months={series.months} detected={series.values.harmonized} from={s.from} to={s.to} /> }] : []),
     { id: 'download', side: 'right', label: 'Download', icon: <DownloadSimple aria-hidden />, title: 'Download and share',
       guide: 'Get the monthly numbers as a CSV with their sources and ranges, or copy a link to this exact view.',
-      body: () => !ready || !s.area ? needsArea : <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1} /> },
+      body: () => !ready || !s.area ? needsArea : <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1}
+        onHotspots={detIndex ? downloadHotspots : undefined} /> },
   ]
   const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
     guide: '', body: () => <AboutPage manifest={m} /> }

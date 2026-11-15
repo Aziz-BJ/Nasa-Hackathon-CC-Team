@@ -46,6 +46,14 @@ describe('toHash and parseHash', () => {
     expect(h).toBe('#from=2019-01&to=2020-11&src=viirs_snpp&view=about')
     expect(parseHash(h)).toMatchObject({ source: 'viirs_snpp', view: 'about' })
   })
+  it('keeps the detections layer in the link only when it is on', () => {
+    const on = { ...base, detections: { ...base.detections, show: true } }
+    expect(toHash(on)).toMatch(/&det=1$/)
+    expect(toHash(base)).not.toMatch(/det=/)
+    expect(parseHash(toHash(on)).detections).toBe(true)
+    expect(applyUrl(m, FIX_OUTLINES, { detections: true }, base).detections.show).toBe(true)
+    expect(applyUrl(m, FIX_OUTLINES, {}, on).detections.show).toBe(true)
+  })
   it('ignores junk', () => {
     // An unknown src goes back to the harmonized record instead of keeping the previous view.
     expect(parseHash('#area=box:9,9,1,1&from=2020-13&src=nope&view=x')).toEqual({ source: 'harmonized' })

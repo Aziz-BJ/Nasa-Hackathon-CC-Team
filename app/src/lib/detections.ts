@@ -4,7 +4,7 @@
 import { booleanPointInPolygon } from '@turf/boolean-point-in-polygon'
 import type { Area } from './area'
 import { parseYm, type YearMonth } from './months'
-import type { DetectionsFile } from './types'
+import type { DetectionsFile, Manifest } from './types'
 
 export const DETECTION_SATELLITES = [
   { key: 'aqua', id: 'AQUA', label: 'Aqua MODIS (1 km pixels)', color: '#E69F00' },
@@ -49,16 +49,13 @@ export interface DetectionSelection {
 }
 
 /**
- * The detections inside the area and the chosen months. Whole regions keep every row of their own file;
- * a drawn shape or typed box is tested point by point (pixel centres). Night and day are both kept.
+ * Calls visit for every detection inside the area and the chosen months. Whole regions keep every row of their own
+ * file; a drawn shape or typed box is tested point by point (pixel centres). Night and day are both kept.
  */
-export function selectDetections(files: DetectionsFile[], area: Area, from: YearMonth, to: YearMonth,
-  sats: DetectionsState, max = MAX_DRAWN): DetectionSelection {
-  const on = [sats.aqua, sats.snpp, sats.noaa20]
+function eachDetection(files: DetectionsFile[], area: Area, from: YearMonth, to: YearMonth,
+  visit: (f: DetectionsFile, i: number, lon: number, lat: number) => void) {
   const [w, s, e, n] = area.bbox
   const shape: GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon> = { type: 'Feature', properties: {}, geometry: area.geometry }
-  const counts: [number, number, number] = [0, 0, 0]
-  const keep: { lon: number; lat: number; s: number; scanKm: number }[] = []
   for (const f of files) {
     const span = daySpan(f.year, from, to)
     if (!span) continue
@@ -72,11 +69,22 @@ export function selectDetections(files: DetectionsFile[], area: Area, from: Year
         if (lon < w || lon > e || lat < s || lat > n) continue
         if (!booleanPointInPolygon([lon, lat], shape)) continue
       }
-      const sat = f.s[i] >> 1
-      counts[sat]++
-      if (on[sat]) keep.push({ lon, lat, s: sat, scanKm: f.w[i] / 100 })
+      visit(f, i, lon, lat)
     }
   }
+}
+
+/** The detections to draw for the area and months, with counts per satellite (see eachDetection). */
+export function selectDetections(files: DetectionsFile[], area: Area, from: YearMonth, to: YearMonth,
+  sats: DetectionsState, max = MAX_DRAWN): DetectionSelection {
+  const on = [sats.aqua, sats.snpp, sats.noaa20]
+  const counts: [number, number, number] = [0, 0, 0]
+  const keep: { lon: number; lat: number; s: number; scanKm: number }[] = []
+  eachDetection(files, area, from, to, (f, i, lon, lat) => {
+    const sat = f.s[i] >> 1
+    counts[sat]++
+    if (on[sat]) keep.push({ lon, lat, s: sat, scanKm: f.w[i] / 100 })
+  })
   const step = keep.length > max ? keep.length / max : 1
   const features: GeoJSON.Feature<GeoJSON.Point, { s: number; k: number }>[] = []
   for (let j = 0; j < keep.length; j += step) {
@@ -93,4 +101,65 @@ export function yearsToLoad(available: string[], from: YearMonth, to: YearMonth)
   const y0 = parseYm(from).year
   const y1 = parseYm(to).year
   return available.map(Number).filter((y) => y >= y0 && y <= y1).sort((a, b) => a - b)
+}
+
+const SAT_NAMES = ['Aqua', 'Suomi NPP', 'NOAA-20'] as const
+const PRODUCTS = ['MODIS Collection 6.1 active fire (1 km)', 'VIIRS 375 m active fire (Collection 2)', 'VIIRS 375 m active fire (Collection 2)'] as const
+const VIIRS_CONF = ['', 'l', 'n', 'h'] as const
+
+export const HOTSPOT_COLUMNS = [
+  'latitude', 'longitude', 'acq_date_utc', 'acq_time_utc', 'local_solar_date', 'satellite', 'instrument', 'daynight',
+  'confidence', 'frp_mw', 'scan_km', 'track_km', 'data_version', 'product', 'region',
+] as const
+
+const pad = (n: number, w = 2) => String(n).padStart(w, '0')
+const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10)
+
+/**
+ * CSV of every cleaned FIRMS detection (hotspot) in the area and months, for the Download panel. Raw, not
+ * harmonized; the header says how the rows were cleaned and that counts, FRP and confidence differ between sensors.
+ */
+export function hotspotsCsv(m: Manifest, files: DetectionsFile[], area: Area, from: YearMonth, to: YearMonth,
+  generatedAt = new Date()): { csv: string; rows: number; counts: [number, number, number] } {
+  const counts: [number, number, number] = [0, 0, 0]
+  const lines: string[] = []
+  eachDetection(files, area, from, to, (f, i, lon, lat) => {
+    const sat = f.s[i] >> 1
+    counts[sat]++
+    const local = Date.UTC(f.year, 0, 1) + f.d[i] * 86_400_000
+    const utc = local + f.t[i] * 60_000
+    const time = new Date(utc)
+    lines.push([
+      lat.toFixed(4), lon.toFixed(4), isoDay(utc), pad(time.getUTCHours()) + pad(time.getUTCMinutes()), isoDay(local),
+      SAT_NAMES[sat], sat === 0 ? 'MODIS' : 'VIIRS', f.s[i] & 1 ? 'N' : 'D',
+      sat === 0 ? String(f.c[i]) : VIIRS_CONF[f.c[i]] ?? '', String(f.p[i]), (f.w[i] / 100).toFixed(2), (f.h[i] / 100).toFixed(2),
+      f.q[i] ? 'NRT' : 'SP', PRODUCTS[sat], f.region,
+    ].join(','))
+  })
+  const [w, s, e, n] = area.bbox.map((x) => Math.round(x * 1000) / 1000)
+  const total = counts[0] + counts[1] + counts[2]
+  const fmt = (x: number) => x.toLocaleString('en-GB')
+  const header = [
+    '# NASA FIRMS fire detections (hotspots) for this search, after the team\'s cleaning. Raw detections, NOT harmonized.',
+    `# Area: ${area.label} (bbox W ${w}, S ${s}, E ${e}, N ${n}). ${area.regionIds ? 'Whole region: every detection assigned to it.' : 'Pixel centres inside the shape.'}`,
+    `# Months: ${from} to ${to}, by local solar day; data to ${m.last_day}. Exported ${generatedAt.toISOString()}.`,
+    `# Detections: ${fmt(total)} (Aqua MODIS ${fmt(counts[0])}, Suomi NPP VIIRS ${fmt(counts[1])}, NOAA-20 VIIRS ${fmt(counts[2])}).`,
+    '# Counts are not comparable between sensors: VIIRS (375 m pixels) sees many more, smaller fires than MODIS (1 km). The harmonized record in the app corrects for this; these rows do not.',
+    '# FRP and confidence are not comparable between sensors either. confidence: MODIS 0-100 (%); VIIRS l (low), n (nominal), h (high).',
+    '# acq_date_utc, acq_time_utc: satellite overpass in UTC (FIRMS acq_date, acq_time, HHMM). local_solar_date: the day the record counts the detection on.',
+    '# data_version: SP = standard processing; NRT = near real-time, provisional (may change when standard data replace it).',
+    '# Cleaning (pipeline v1.1): duplicates removed; detections FIRMS flags as volcanoes, static land sources or offshore removed, plus Etna and Stromboli and everything within 1 km of 1,311 recurring heat sources;'
+      + ' MODIS confidence below 30% and VIIRS low confidence removed; repeat detections of the same fire from overlapping pixels or orbits removed.',
+    '# Positions are rounded to 0.0001 degrees (about 10 m), FRP to 1 MW, scan and track (pixel size along scan and track, km) to 10 m.',
+    '# A hotspot is a thermal anomaly in a satellite pixel, not a confirmed fire, and not burned area. Zero detections is not "no fire" (cloud, smoke, gaps between passes). Not for tactical decisions during a fire.',
+    "# We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science Data and Information System (ESDIS).",
+    '# FIRMS data are provided "as is", without warranty of any kind.',
+    `# Dataset: ${m.dataset_name}${m.mock ? ' (MOCK DATA, NOT REAL)' : ''}; generated ${m.generated_at}.`,
+  ]
+  return { csv: [...header, HOTSPOT_COLUMNS.join(','), ...lines].join('\n') + '\n', rows: total, counts }
+}
+
+export function hotspotsFilename(area: Area, from: YearMonth, to: YearMonth): string {
+  const slug = area.label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)
+  return `hotspots_${slug}_${from}_${to}.csv`
 }

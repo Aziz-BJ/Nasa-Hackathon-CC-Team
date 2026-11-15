@@ -16,6 +16,8 @@ export interface UrlState {
   to?: YearMonth
   source?: SeriesKey
   view?: View
+  /** det=1: the native pixel detections layer is on. */
+  detections?: boolean
 }
 
 const YM = /^\d{4}-(0[1-9]|1[0-2])$/
@@ -37,6 +39,7 @@ export function parseHash(hash: string): UrlState {
   // An unknown src falls back to the harmonized record rather than keeping whatever was shown before.
   if (src) out.source = (SERIES_KEYS as readonly string[]).includes(src) ? src as SeriesKey : 'harmonized'
   if (q.get('view') === 'about') out.view = 'about'
+  if (q.get('det') === '1') out.detections = true
   return out
 }
 
@@ -50,6 +53,7 @@ export function toHash(s: AppState): string {
   q.set('to', s.to)
   q.set('src', s.source)
   if (s.view === 'about') q.set('view', 'about')
+  if (s.detections.show) q.set('det', '1')
   return '#' + q.toString().replace(/%3A/g, ':').replace(/%2C/g, ',')
 }
 
@@ -66,5 +70,6 @@ export function applyUrl(m: Manifest, outlines: Outlines | null, u: UrlState, ba
     to: from <= to ? to : from,
     source: u.source ?? base.source,
     view: u.view ?? base.view,
+    detections: u.detections ? { ...base.detections, show: true } : base.detections,
   }
 }

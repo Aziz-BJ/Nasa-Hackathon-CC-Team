@@ -162,6 +162,12 @@ export interface DetectionsFile {
   w: number[]
   h: number[]
   p: number[]
+  /** UTC acquisition time, minutes from 00:00 UTC of the local date (docs/DATA_CONTRACT.md). */
+  t: number[]
+  /** Confidence: MODIS 0-100; VIIRS 1 low, 2 nominal, 3 high. */
+  c: number[]
+  /** 1 = near real-time (provisional), 0 = standard processing. */
+  q: number[]
 }
 
 /** detections/index.json: the years available per region, with counts per satellite [AQUA, SNPP, NOAA20]. */

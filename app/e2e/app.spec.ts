@@ -171,9 +171,24 @@ test.describe('app', () => {
     const key = page.locator('.legend-detections')
     await expect(key).toContainText('raw, not harmonized')
     await expect(key).toContainText(/S-NPP VIIRS \(375 m\): [1-9]/)
+    await expect(page).toHaveURL(/det=1/)
     await sats.uncheck()
     await expect(key).toContainText('(hidden)')
     expect((await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => v.id)).toEqual([])
+  })
+
+  test('hotspots CSV: one row per detection in the search, with the FIRMS credit', async ({ page }) => {
+    await page.goto('/#area=region:sardinia&from=2021-07&to=2021-07&src=harmonized')
+    await expect(selection(page)).toContainText('Sardinia')
+    await openPanel(page, 'Download')
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download hotspots CSV' }).click()])
+    expect(dl.suggestedFilename()).toBe('hotspots_sardinia_2021-07_2021-07.csv')
+    const text = readFileSync((await dl.path())!, 'utf8')
+    expect(text).toContain("We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS)")
+    expect(text).toContain('NOT harmonized')
+    // 67 Aqua + 806 S-NPP + 696 NOAA-20, checked against the source parquet with DuckDB.
+    expect(text.split('\n').filter((l) => /^\d+\.\d{4},/.test(l))).toHaveLength(1569)
+    await expect(page.locator('#drawer')).toContainText('Saved 1,569 hotspots.')
   })
 
   test('an incomplete month and drifted raw Aqua get numbers but no verdict', async ({ page }) => {
