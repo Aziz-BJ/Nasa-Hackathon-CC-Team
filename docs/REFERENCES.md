@@ -7,12 +7,15 @@ Library versions are the exact ones in `demo/package-lock.json`.
 
 | Source | What we use | Licence / terms | URL |
 | --- | --- | --- | --- |
-| NASA FIRMS | MODIS Collection 6.1 active fire (Terra + Aqua), 1 km | NASA open data, no restriction on use; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
+| NASA FIRMS | MODIS Collection 6.1 active fire, 1 km (the record uses Aqua only) | NASA open data, no restriction on use; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
 | NASA FIRMS | VIIRS 375 m active fire (Suomi NPP, NOAA-20) | NASA open data, no restriction on use; credit NASA FIRMS | https://firms.modaps.eosdis.nasa.gov/ |
+| ISTAT, via openpolis/geojson-italy | Italian region boundaries (Andrea's region outlines) | Italian official statistics; credit ISTAT. Terms in the openpolis/geojson-italy repository | https://github.com/openpolis/geojson-italy |
+| US Census Bureau TIGER 2010, via jgoodall/us-maps | California state boundary (includes its 3 nautical miles of state waters) | US Government work; credit US Census Bureau | https://www.census.gov/geographies/mapping-files.html |
+| Natural Earth 1:10m admin-0 | Neighbouring countries, so Italy's sea margin never claims foreign land | Public domain | https://www.naturalearthdata.com |
 | NASA GIBS | BlueMarble_ShadedRelief_Bathymetry and VIIRS_Black_Marble (2016) imagery tiles | NASA open data; credit NASA GIBS | https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api |
 | OpenFreeMap | Vector tiles (OpenMapTiles schema) and fonts for country borders and place names | Free to use with credit; map data © OpenStreetMap contributors (ODbL 1.0); © OpenMapTiles | https://openfreemap.org · https://www.openstreetmap.org/copyright |
 
-The demo build uses synthetic mock data (`demo/scripts/make-mock-data.ts`), clearly labelled; the "reported fires" mock series stands in for a published statistic still to be chosen (for example England FIRE0802 or StatsWales).
+The app runs on the team's real harmonized record (`pipeline/harmonized_outputs_REAL/`), built from the FIRMS archive requests listed in Andrea's handover. The earlier synthetic mock data is retired. No ground-reported fire statistic is wired in yet (candidates: EFFIS for Italy, CAL FIRE for California).
 
 ## Software
 

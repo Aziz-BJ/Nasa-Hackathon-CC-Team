@@ -23,7 +23,8 @@ export function buildCsv(m: Manifest, area: Area, series: AreaSeries, i0: number
     `# Area: ${area.label} (${Math.round(area.areaKm2).toLocaleString('en-GB')} km²; bbox W ${w}, S ${s}, E ${e}, N ${n})`,
     area.regionIds
       ? `# Numbers: the team's harmonized record for ${area.regionIds.length > 1 ? 'these regions, added together' : 'this region'}.`
-        + (series.bandSummed ? ' low_90/high_90 add the regions\' 90% ranges, so they are wider than the true range.' : '')
+        + ' low_90/high_90 are the 90% predictive range of the count; in measured Aqua months they equal the value (no model range).'
+        + (series.bandSummed ? ' Here they add the regions\' ranges, so they are wider than the true range.' : '')
       : `# Numbers: sum of the ${m.cell_km} km fire cells whose centre is inside the area. The harmonized column is an estimate`
         + ' (the region\'s conversion applied to part of it) and has no 90% range. Raw sensor columns are exact.',
     `# Unit: ${m.unit} = ${m.cell_km} km cells with at least one fire detection in a day or night pass, on the scale of ${m.method.reference_scale}.`,

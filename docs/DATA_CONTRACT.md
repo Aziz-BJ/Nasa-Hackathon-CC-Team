@@ -1,143 +1,112 @@
-# Data contract: pipeline → Hotspot Calendar app
+# Data contract: pipeline → Hotspot Calendar app (version 2)
 
-For Andre and Pierre. This is what the app reads (`schema_version` 1). It keeps the fields of HANDOVER section 7, packed into
-10° tiles so an area drawn anywhere on the globe loads only the files it touches. A writer that produces these files from
-monthly cell counts is in [`write_app_data.py`](write_app_data.py) (formatting only; it never changes a number).
+What the app reads from `demo/public/data/<name>/`. Since 15 Nov 2026 it is written by the importer, not by hand:
+
+```bash
+cd demo
+npm run import-data -- --cells <path to Andrea's cell_days.csv>
+#   --pipeline <folder>   Pierre's outputs (default ../pipeline/harmonized_outputs_REAL)
+#   --outlines <geojson>  region outlines (default ../pipeline/region_outlines/region_outlines_all_four_regions.geojson)
+#   --out <folder>        (default public/data/real)
+```
+
+Run it again after any new pipeline run. It stops, writing nothing, if the inputs do not add up: regions or months missing, `H` outside
+its range, a partial month that is not the last one, days by source that differ between regions, a measured month that the cells do not
+rebuild exactly, or raw counts per satellite that differ from Pierre's. On the 15 Nov run: 904 of 904 measured months rebuilt exactly,
+and raw counts matched in 1,172 of 1,172 region-months.
+
+## Inputs
+
+| From | File | Used for |
+|---|---|---|
+| Pierre | `harmonized_monthly.csv` | the record: `H`, `H_pred_lo/hi`, raw counts per satellite, days per source, `partial_month` |
+| Pierre | `current_month_to_date.csv` | the unfinished month against the same days of every year |
+| Pierre | `factors.csv` | converting each S-NPP / NOAA-20 cell-day to the Aqua scale for the map, and the Sensors panel table |
+| Pierre | `missing_days.csv` | which satellite the record uses on each day |
+| Pierre | `validation_loyo.csv`, `validation_seams.csv`, `validation_chain_stress.csv` | headline validation numbers in About |
+| Andrea | `cell_days.csv` (v1.1) | one row per 5 km cell × local day × satellite × day/night |
+| Andrea | `region_outlines_all_four_regions.geojson` | the `kind: land` outline of each region |
 
 ## Files
 
-```
-demo/public/data/<dataset>/manifest.json              grid, months, sensors, coverage, filters, method, presets, tile list
-demo/public/data/<dataset>/tiles/<row>_<col>.json     one 10° tile: cell ids + one array per cell per series (one value per month)
-demo/public/data/<dataset>/overview.json              coarse global layer (mean hotspots per year) for the globe
-demo/public/data/<dataset>/reported.json              optional: ground-reported fire statistics for presets
-```
+| File | Size (15 Nov run) | Loaded |
+|---|---|---|
+| `manifest.json` | 5 KB | at start |
+| `regions.json` | 31 KB | at start |
+| `outlines.json` | 88 KB | at start (optional: without it, regions are drawn as boxes) |
+| `cells/<region>.json` | 0.1 to 2 MB (1 MB gzipped in all) | when an area touches the region |
+| `reported.json` | optional | ground-reported fires; the Reported panel shows only if it exists |
 
-Run the app on it: `cd demo && VITE_DATASET=<dataset> npm run dev`. A broken field is named on screen.
-
-## Rules
-
-- **Grid:** `cell_id = "<row>_<col>"`, `row = floor((lat + 90) / grid_deg)`, `col = floor((lon + 180) / grid_deg)`
-  (HANDOVER 7.1; e.g. lat 38.125, lon −1.875 at 0.25° is `512_712`). Tiles use the same rule with `tile_deg` (10).
-- **Months:** every series array has one value per month from `first_month` to `last_month` (inclusive, UTC months).
-- **null vs 0:** `null` only where that series was not operating (outside the sensor's `first_month`–`last_month`,
-  or outside `harmonized_coverage` for harmonized); `0` where it operated and saw nothing. Cells that never burn are left out
-  (absent = 0).
-- **Uncertainty band:** `harmonized_low` and `harmonized_high` are optional, but present for every cell or for none.
-- **Counts** are after the filters in `manifest.filters` (type 0 = presumed vegetation fire; confidence thresholds).
-- **`month_to_date`:** true when `last_month` is not finished. The app gives no verdict for that month.
-- **`nrt_from`:** the first month that is still near real-time (provisional) in the downloaded files.
-- **`coverage`:** every box the pipeline processed, so the app can say "no data loaded here" rather than show a false zero.
-- **`mock`:** must be `false`. A production build refuses a mock dataset.
-- **Size:** if a tile is over about 2 MB gzipped, tell Aziz (the tile format can change inside `src/lib/data.ts` only).
-
-## Checklist before handing over
-
-- [ ] `manifest.json` has `"mock": false`, a real `generated_at`, and `sensors` with FIRMS versions and first/last months read from the files (S-NPP end and NOAA-21 start: HANDOVER 13.5).
-- [ ] `nrt_from` is the first month that is still NRT in the downloaded files; `month_to_date` is right for `last_month`.
-- [ ] Every tile listed in `tiles` exists; cell ids use `grid_deg`; every array has `months(first_month..last_month)` values.
-- [ ] `null` only where a series was not operating; `0` where it operated and saw nothing.
-- [ ] `coverage` lists every processed box; `presets` have `id`, `name`, `bbox` [west, south, east, north].
-- [ ] `method` and `validation` filled by Pierre (they appear on the About page).
-- [ ] `harmonized_low/high` present for every cell or absent everywhere.
-
-## The contract in code (`demo/src/lib/types.ts`)
+### manifest.json
 
 ```ts
-// Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
-// The data contract between the pipeline (Andre, Pierre) and the app. Proposed extension of HANDOVER.md section 7:
-// same fields, packed into 10-degree tiles so any drawn area on the globe loads only the files it needs.
-import type { Bbox } from './grid'
-import type { YearMonth } from './months'
-
-export const SERIES_KEYS = ['harmonized', 'modis', 'viirs_snpp', 'viirs_noaa20'] as const
-export type SeriesKey = (typeof SERIES_KEYS)[number]
-export type SensorKey = Exclude<SeriesKey, 'harmonized'>
-export type BandKey = 'harmonized_low' | 'harmonized_high'
-
-export const SERIES_LABELS: Record<SeriesKey, string> = {
-  harmonized: 'Harmonized (MODIS + VIIRS)',
-  modis: 'MODIS only (raw)',
-  viirs_snpp: 'VIIRS S-NPP only (raw)',
-  viirs_noaa20: 'VIIRS NOAA-20 only (raw)',
-}
-
-export interface SensorInfo {
-  key: SensorKey
-  label: string
-  source: string
-  version: string
-  first_month: YearMonth
-  last_month: YearMonth
-}
-
-export interface Preset {
-  id: string
-  name: string
-  bbox: Bbox
-}
-
-export interface Manifest {
-  schema_version: 1
-  mock: boolean
-  dataset_name: string
-  grid_deg: number
-  tile_deg: number
-  first_month: YearMonth
-  last_month: YearMonth
-  /** true when last_month is not finished yet ("month to date"). */
-  month_to_date: boolean
-  /** First month that is near-real-time (provisional) rather than standard science-quality data. */
-  nrt_from: YearMonth
-  baseline_years: [number, number]
-  harmonized_coverage: [YearMonth, YearMonth]
-  sensors: SensorInfo[]
-  /** Areas the pipeline processed. Outside these, "no data" is not the same as "no hotspots". */
-  coverage: Bbox[]
-  filters: { type: number[]; modis_confidence_min: number; viirs_confidence: string[] }
-  method: {
-    name: string
-    version: string
-    reference_scale: string
-    fit_years: [number, number] | null
-    test_years: [number, number] | null
-  }
-  validation: { metric: string; value: number | null; notes: string }
+{
+  schema_version: 2, mock: boolean, dataset_name: string,
+  first_month: 'YYYY-MM', last_month: 'YYYY-MM',  // 2002-07 .. 2026-11
+  month_to_date: boolean, last_day: 'YYYY-MM-DD',  // true, 2026-11-13
+  nrt_from: 'YYYY-MM',                              // near-real-time (provisional) from 2026-08
+  baseline_years: [2003, 2025], harmonized_coverage: ['YYYY-MM', 'YYYY-MM'],
+  unit: 'fire cell-days', cell_km: 5,
+  sensors: [{ key: 'modis' | 'viirs_snpp' | 'viirs_noaa20', label, source, version, first_month, last_month }],
+  days: { aqua: number[], snpp: number[], noaa20: number[], none: number[] },  // per month: days by the satellite the record uses
+  regions: [{ id, name, bbox: [w, s, e, n], area_km2, cells }],
+  groups: [{ id: 'italy', name: 'All of Italy', regions: ['italy_mainland', 'sicily', 'sardinia'] }],
+  method: { name, version, reference_scale, fit_window },
+  validation: { loyo_male_naive, loyo_male, loyo_r2, coverage90, seams: [{ seam, step_pct, lo90_pct, hi90_pct, no_step }], chain_ratio },
   generated_at: string
-  tiles: string[]
-  presets: Preset[]
-}
-
-/**
- * One tile. Cells with no detections in any month are left out (sparse), which means 0, not "no data".
- * Each series holds one array per cell, one value per month from manifest.first_month to last_month.
- * null = that sensor was not operating that month.
- */
-export interface TileFile {
-  tile_id: string
-  cells: string[]
-  series: Record<SeriesKey, (number | null)[][]> & Partial<Record<BandKey, (number | null)[][]>>
-}
-
-export interface OverviewFile {
-  grid_deg: number
-  metric: string
-  cells: [lat: number, lon: number, value: number][]
-}
-
-export interface ReportedSeries {
-  preset_id: string
-  label: string
-  source: string
-  licence: string
-  url: string
-  unit: string
-  first_month: YearMonth
-  values: (number | null)[]
-}
-
-export interface ReportedFile {
-  mock: boolean
-  series: ReportedSeries[]
 }
 ```
+
+### regions.json
+
+```ts
+{
+  series: { [regionId]: {          // one value per month, first_month..last_month
+    harmonized: number[],          // Pierre's H
+    low: number[], high: number[], // H_pred_lo / H_pred_hi (equal to H in measured Aqua months)
+    modis: (number | null)[], viirs_snpp: (number | null)[], viirs_noaa20: (number | null)[]  // raw cell-days, null before launch
+  } },
+  mtd: { month: 'YYYY-MM', day: number, years: number[],
+         series: { [regionId]: { values: number[], low: number[], high: number[] } } } | null,
+  factors: { [regionId]: [{ model: 'snpp_to_aqua' | 'noaa20_to_snpp' | 'noaa20_to_aqua', season: 'fire' | 'off', daynight: 'D' | 'N', factor, low, high }] }
+}
+```
+
+### outlines.json
+
+A GeoJSON FeatureCollection, one MultiPolygon per region with properties `{ id, name }`: Andrea's land outlines (ISTAT regions for
+Italy, US Census TIGER 2010 for California), simplified to about 400 m for the web.
+
+### cells/&lt;region&gt;.json
+
+```ts
+{
+  region: string,
+  cells: [id, lat, lon][],    // Andrea's cell_id and cell centre
+  entries: number[],          // [cell index, month index, harmonized, aqua, snpp, noaa20] repeated, sorted by cell then month
+  mtd: number[]               // [cell index, year index (into regions.json mtd.years), harmonized] repeated
+}
+```
+
+Cells and months that are not listed are 0. Raw counts are all of that satellite's cell-days (as in Pierre's `raw_*` columns).
+The harmonized value follows Pierre's source rule day by day:
+
+1. For each day, take the satellite the record uses (Aqua to 30 Jun 2021, S-NPP to 1 Nov 2026, NOAA-20 after; a missing satellite-day
+   falls to the next source, as in METHOD.md section 0).
+2. Count each of that satellite's cell-days as 1 (Aqua) or as Pierre's factor for its region, season and day/night (S-NPP → Aqua, or the
+   NOAA-20 → Aqua chain).
+3. Scale every region-month so its cells add up exactly to Pierre's `H`. This carries the model's fire-size term, which the factor table
+   leaves out. Before scaling, converted months were within 0.65 to 1.33 of `H` (median 0.99).
+
+So a whole region always shows Pierre's numbers, and a drawn shape inside a region is an estimate: the region's conversion applied to
+part of it. The app says so and shows no 90% range for drawn shapes.
+
+## Rules the app relies on
+
+- `null` means the sensor was not flying; 0 means it flew and saw nothing.
+- A count of 0 is not "no fire": cloud, smoke and gaps between passes hide fires.
+- Only the last month may be partial, and it is compared with the same days of earlier years (`regions.json` `mtd`), never with whole months.
+- A production build refuses a dataset with `mock: true` (`scripts/check-data.mjs`).
+
+The app's TypeScript types for all of this are in [`demo/src/lib/types.ts`](../demo/src/lib/types.ts).
+Version 1 (10° tiles of a global grid, written by `write_app_data.py`) was used by the mock-data demo before the real data arrived; it is retired.

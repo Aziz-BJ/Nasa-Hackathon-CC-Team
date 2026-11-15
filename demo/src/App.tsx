@@ -37,7 +37,7 @@ import { saveFile } from './lib/download'
 import { calendarMedians, compareWith, summarizeMonth, summarizeMtd, VERDICT_LABELS, yearToDate, type MonthSummary, type VerdictLevel } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, regionsToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm, monthRange, MONTH_LONG, parseYm, type YearMonth } from './lib/months'
-import { monthIndex, monthStatus, sensorsIn, sourceOf } from './lib/status'
+import { monthIndex, monthStatus, sensorsIn, sourceCode, sourceOf } from './lib/status'
 import { SERIES_LABELS, type Manifest, type RegionsFile, type ReportedFile, type SeriesKey } from './lib/types'
 import { initialState, reducer, type AppState } from './state/appState'
 import { applyUrl, parseHash, toHash } from './state/urlState'
@@ -167,11 +167,14 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
       const k = series.mtd.years.indexOf(parseYm(s.to).year)
       return k >= 0 ? [series.mtd.low[k], series.mtd.high[k]] : null
     }
+    // Measured Aqua months have no model range; every converted month has one (it can be 0 to 0 in quiet months).
+    if (sourceCode(m, s.to) === 'measured_aqua') return null
     const lo = series.low?.[i1]
     const hi = series.high?.[i1]
-    return lo !== null && lo !== undefined && hi !== null && hi !== undefined && hi > lo ? [lo, hi] : null
+    return lo !== null && lo !== undefined && hi !== null && hi !== undefined ? [lo, hi] : null
   })()
-  const rangeNote = !harmonizedSource ? null : series?.estimate ? 'estimate' as const : range ? null : 'measured' as const
+  const rangeNote = !harmonizedSource ? null : series?.estimate ? 'estimate' as const
+    : !range && sourceCode(m, s.to) === 'measured_aqua' ? 'measured' as const : null
   const ytd = series ? yearToDate(values, series.months, s.to, m.baseline_years) : null
   let total: number | null = null
   let monthsWithData = 0
@@ -287,7 +290,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   const closeGuide = () => { markGuideSeen(); setGuide(false) }
 
   const selection = `${s.area?.label ?? 'No area'}, ${labelYm(s.from)} – ${labelYm(s.to)}`
-  const rangeText = range ? ` (90% range ${fmtCount(range[0])}–${fmtCount(range[1])})` : ''
+  const rangeText = range ? ` (90% range ${fmtCount(range[0])}–${fmtCount(range[1])})` : rangeNote === 'estimate' ? ' (estimate for this shape)' : ''
   const headline: ReactNode = !s.area ? 'Choose an area to begin.'
     : data.coverage === 'none' ? 'No data here: the record covers the four study regions.'
     : !focus || focus.value === null ? `${s.area.label}: loading…`
@@ -364,8 +367,8 @@ function CellDetail({ ym, series, manifest: m, seriesLabel, source }: {
   const status = monthStatus(m, ym, source)
   const lo = series.low?.[i]
   const hi = series.high?.[i]
-  const range = source === 'harmonized' && lo !== null && lo !== undefined && hi !== null && hi !== undefined && hi > lo
-    ? ` (90% range ${fmtCount(lo)}–${fmtCount(hi)})` : ''
+  const range = source === 'harmonized' && !series.estimate && sourceCode(m, ym) !== 'measured_aqua' && status !== 'partial'
+    && lo !== null && lo !== undefined && hi !== null && hi !== undefined ? ` (90% range ${fmtCount(lo)}–${fmtCount(hi)})` : ''
   let compare = ''
   if (status === 'partial') compare = sum.baseline && sum.value !== null
     ? `So far (to ${m.last_day}): ${fmtCount(sum.value)}; the ${y0}–${y1} median for the same days is ${fmtCount(sum.baseline.median)}. `

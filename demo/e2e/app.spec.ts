@@ -14,43 +14,58 @@ test.describe('app', () => {
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('hotspot-calendar-guide-seen', '1'))
     await page.goto('/')
-    await expect(headline(page)).toContainText('hotspots')
+    await expect(headline(page)).toContainText('fire cell-days')
   })
 
-  test('loads with no login and shows the mock banner on demo builds', async ({ page }) => {
-    await expect(page.getByText('MOCK DATA, NOT REAL')).toBeVisible()
+  test('loads real data with no login and no mock banner', async ({ page }) => {
+    await expect(page.getByText('MOCK DATA, NOT REAL')).toHaveCount(0)
+    await expect(selection(page)).toContainText('Mainland Italy')
     await expect(page.locator('.maplibregl-ctrl-attrib')).toContainText('NASA FIRMS')
   })
 
-  test('a preset gives the calendar, verdict and charts', async ({ page }) => {
+  test('a region gives the calendar, verdict with its 90% range, charts and factors', async ({ page }) => {
     await openPanel(page, 'Area')
-    await page.getByLabel('Preset region').selectOption('uk')
-    await expect(selection(page)).toContainText('United Kingdom (mock)')
+    await page.getByRole('button', { name: /^Sicily/ }).click()
+    await expect(selection(page)).toContainText('Sicily')
+    await expect(page.locator('#drawer')).toContainText('cells with fire detections')
     await openPanel(page, 'Calendar')
     await expect(page.getByRole('rowheader', { name: '2003', exact: true })).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: 'More info' }).click()
     await expect(page.getByText(/percentile of \d+ Octobers/)).toBeVisible()
+    await expect(page.locator('.kpis')).toContainText('90% range')
     await page.getByRole('button', { name: 'Less' }).click()
     await openPanel(page, 'Sensors')
-    await expect(page.getByRole('img', { name: /yearly hotspot totals/ })).toBeVisible()
-    await openPanel(page, 'Reported')
-    await expect(page.getByRole('heading', { name: 'Fires detected and fires reported' })).toBeVisible()
+    await expect(page.getByRole('img', { name: /yearly fire cell-days/ })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Conversion factors' })).toBeVisible()
+    // No ground-reported source yet, so the Reported box is not offered.
+    await expect(page.getByRole('button', { name: 'Reported', exact: true })).toHaveCount(0)
+  })
+
+  test('the unfinished month is compared with the same days of earlier years', async ({ page }) => {
+    await page.goto('/#area=region:california&from=2026-01&to=2026-11&src=harmonized')
+    await expect(headline(page)).toContainText(/1–\d+ November 2026/)
+    await expect(headline(page)).toContainText('(so far)')
+    await page.getByRole('button', { name: 'More info' }).click()
+    await expect(page.locator('#kpi-title').locator('..')).toContainText('compared with the same days in earlier years')
   })
 
   test('typed coordinates: valid box works, invalid box explains why', async ({ page }) => {
     await openPanel(page, 'Area')
     await page.getByText('Or type coordinates').click()
     const field = (label: string, value: string) => page.getByLabel(label, { exact: true }).fill(value)
-    await field('West', '5')
-    await field('South', '50')
-    await field('East', '1')
-    await field('North', '60')
+    await field('West', '10')
+    await field('South', '38.8')
+    await field('East', '8')
+    await field('North', '41.3')
     await page.getByRole('button', { name: 'Use these coordinates' }).click()
     await expect(page.getByRole('alert')).toContainText('West must be less than east')
-    await field('West', '-6')
+    await field('West', '7.5')
+    await field('East', '10')
     await page.getByRole('button', { name: 'Use these coordinates' }).click()
-    await expect(selection(page)).toContainText('Box W -6, S 50, E 1, N 60')
+    await expect(selection(page)).toContainText('Box W 7.5, S 38.8, E 10, N 41.3')
+    await expect(headline(page)).toContainText('fire cell-days')
+    await expect(page.locator('#drawer')).toContainText('The harmonized line is an estimate')
   })
 
   test('an area outside the loaded data says so instead of showing zeros', async ({ page }) => {
@@ -62,12 +77,12 @@ test.describe('app', () => {
     await field('East', '-50')
     await field('North', '0')
     await page.getByRole('button', { name: 'Use these coordinates' }).click()
-    await expect(headline(page)).toContainText('No data is loaded for this area yet')
+    await expect(headline(page)).toContainText('No data here')
   })
 
   test('drawing a circle on the globe selects an area', async ({ page, isMobile }) => {
-    test.skip(isMobile, 'Drawing is checked on desktop; phones use presets and typed coordinates.')
-    await page.waitForTimeout(2000) // let the globe finish flying to the first preset
+    test.skip(isMobile, 'Drawing is checked on desktop; phones use the region list and typed coordinates.')
+    await page.waitForTimeout(2000) // let the globe finish flying to the first region
     await openPanel(page, 'Area')
     await page.getByRole('button', { name: 'Circle' }).click()
     const { width, height } = page.viewportSize()!
@@ -102,16 +117,17 @@ test.describe('app', () => {
     await openPanel(page, 'Download')
     const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV' }).click()])
     const text = readFileSync((await download.path())!, 'utf8')
-    expect(text).toContain('# Counts are satellite hotspot detections, not fires or burned area.')
-    expect(text).toContain('MOCK DATA, NOT REAL')
+    expect(text).toContain('Fire cell-days count satellite detections, not fires or burned area')
+    expect(text).toContain('fire_cell_days_harmonized,low_90,high_90,source')
+    expect(text).not.toContain('MOCK DATA')
     expect(text.split('\n').filter((l) => /^\d{4},/.test(l))).toHaveLength(12)
   })
 
   test('the link restores the same view, also when pasted into an open tab', async ({ page }) => {
-    await page.goto('/#area=preset:uk&from=2022-01&to=2024-12&src=modis')
-    await expect(selection(page)).toContainText('United Kingdom (mock), Jan 2022 – Dec 2024')
+    await page.goto('/#area=region:california&from=2022-01&to=2024-12&src=modis')
+    await expect(selection(page)).toContainText('California, Jan 2022 – Dec 2024')
     await openPanel(page, 'Layers')
-    await expect(page.getByLabel('MODIS only (raw)')).toBeChecked()
+    await expect(page.getByLabel('Aqua MODIS only (raw)')).toBeChecked()
   })
 
   test('the date bar moves by keyboard, and manual entry is one tap away', async ({ page }) => {
@@ -127,7 +143,7 @@ test.describe('app', () => {
   test('downloads: CSV from More info and a chart image', async ({ page }) => {
     await page.getByRole('button', { name: 'More info' }).click()
     const [csv] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download CSV of these months' }).click()])
-    expect(readFileSync((await csv.path())!, 'utf8')).toContain('hotspots_harmonized')
+    expect(readFileSync((await csv.path())!, 'utf8')).toContain('fire_cell_days_harmonized')
     await page.getByRole('button', { name: 'Less' }).click()
     await openPanel(page, 'Trends')
     const [img] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download image (SVG)' }).first().click()])
@@ -140,6 +156,8 @@ test.describe('app', () => {
     await page.getByRole('button', { name: 'About' }).click()
     await expect(page.locator('#drawer')).toContainText('© OpenStreetMap contributors')
     await expect(page.locator('#drawer')).toContainText('not an official warning service')
+    await expect(page.locator('#drawer')).toContainText('ISTAT')
+    await expect(page.locator('#drawer')).toContainText('inside the 90% ranges')
   })
 
   test('no automatic accessibility violations', async ({ page }) => {
@@ -161,11 +179,11 @@ test('the guide opens on the first visit and can be reopened', async ({ page }) 
   await page.goto('/')
   await expect(page.getByRole('dialog')).toContainText('Step 1 of')
   await page.getByRole('button', { name: 'Next' }).click()
-  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Area' })).toBeVisible()
+  await expect(page.getByRole('dialog').getByRole('heading', { name: 'Fire cell-days' })).toBeVisible()
   await page.getByRole('button', { name: 'Skip guide' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.reload()
-  await expect(headline(page)).toContainText('hotspots')
+  await expect(headline(page)).toContainText('fire cell-days')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.getByRole('button', { name: 'Guide' }).click()
   await expect(page.getByRole('dialog')).toContainText('Step 1 of')
