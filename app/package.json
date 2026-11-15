@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "check-data": "node scripts/check-data.mjs pre",
-    "import-data": "node scripts/import-data.ts"
+    "import-data": "node scripts/import-data.ts",
+    "import-detections": "node --max-old-space-size=6000 scripts/import-detections.ts"
   },
   "dependencies": {
     "@observablehq/plot": "0.6.19",
@@ -41,6 +42,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "hyparquet": "1.33.0",
     "jsdom": "31.0.1",
     "oxlint": "^1.90.0",
     "typescript": "~7.0.2",

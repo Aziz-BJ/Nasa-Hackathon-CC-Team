@@ -16,7 +16,7 @@ export function TopBar({ selection, onSelectionClick, onGuide, onAbout }: TopBar
       <button type="button" className="search-pill" data-tour="selection" onClick={onSelectionClick} title="Change the area">
         <span className="app-glyph" aria-hidden><FireSimple weight="fill" /></span>
         <span className="pill-text">
-          <span className="pill-title">Hotspot Calendar</span>
+          <span className="pill-title">Spark 1</span>
           <span className="pill-sub">{selection}</span>
         </span>
         <span className="sr-only">: change the area</span>

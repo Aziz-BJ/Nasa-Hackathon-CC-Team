@@ -1,6 +1,6 @@
 // Portions of this file were generated with AI assistance (Claude) and reviewed by the team.
 // The only place that knows file names and shapes (contract version 2, docs/DATA_CONTRACT.md).
-import { ENTRY_STRIDE, type CellFile, type Manifest, type RegionsFile, type ReportedFile } from './types'
+import { ENTRY_STRIDE, type CellFile, type DetectionsFile, type DetectionsIndex, type Manifest, type RegionsFile, type ReportedFile } from './types'
 
 type FetchFn = (url: string) => Promise<Response>
 
@@ -87,6 +87,8 @@ function isJson(res: Response): boolean {
 
 export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetch(u)) {
   const cells = new Map<string, Promise<LoadedCells>>()
+  const detectionFiles = new Map<string, Promise<DetectionsFile>>()
+  let detectionsIndexP: Promise<DetectionsIndex | null> | null = null
 
   async function getJson<T>(path: string): Promise<T> {
     const res = await fetchFn(baseUrl + path)
@@ -110,6 +112,32 @@ export function createDataSource(baseUrl: string, fetchFn: FetchFn = (u) => fetc
         p = getJson<CellFile>(`cells/${region}.json`).then(indexCells)
         cells.set(region, p)
         p.catch(() => cells.delete(region))
+      }
+      return p
+    },
+    /**
+     * Optional layer: raw detections at native pixel size. Missing (404, or the dev server's HTML fallback) resolves to
+     * null: this build has no detections. A network or server error rejects and is not kept, so the next call tries again.
+     */
+    detectionsIndex(): Promise<DetectionsIndex | null> {
+      if (!detectionsIndexP) {
+        const p = fetchFn(baseUrl + 'detections/index.json').then(async (res) => {
+          if (res.status === 404 || (res.ok && !isJson(res))) return null
+          if (!res.ok) throw new DataError(`Could not load detections/index.json (HTTP ${res.status})`)
+          return (await res.json()) as DetectionsIndex
+        })
+        detectionsIndexP = p
+        p.catch(() => { if (detectionsIndexP === p) detectionsIndexP = null })
+      }
+      return detectionsIndexP
+    },
+    detections(region: string, year: number): Promise<DetectionsFile> {
+      const key = `${region}/${year}`
+      let p = detectionFiles.get(key)
+      if (!p) {
+        p = getJson<DetectionsFile>(`detections/${key}.json`)
+        detectionFiles.set(key, p)
+        p.catch(() => detectionFiles.delete(key))
       }
       return p
     },

@@ -144,3 +144,37 @@ export interface ReportedFile {
   mock: boolean
   series: ReportedSeries[]
 }
+
+/**
+ * Raw cleaned detections of one region-year at native pixel size (detections/<region>/<year>.json).
+ * Parallel arrays: s = satellite index * 2 + 1 at night (AQUA 0/1, SNPP 2/3, NOAA20 4/5); d = day of year (0 = 1 January)
+ * from date_local; x, y = offsets from lon0 / lat0 in 1e-4 degrees; w, h = scan / track in 10 m units; p = FRP in 0.1 MW units.
+ */
+export interface DetectionsFile {
+  region: string
+  year: number
+  lon0: number
+  lat0: number
+  s: number[]
+  d: number[]
+  x: number[]
+  y: number[]
+  w: number[]
+  h: number[]
+  p: number[]
+  /** UTC acquisition time, minutes from 00:00 UTC of the local date (docs/DATA_CONTRACT.md). */
+  t: number[]
+  /** Confidence: MODIS 0-100; VIIRS 1 low, 2 nominal, 3 high. */
+  c: number[]
+  /** 1 = near real-time (provisional), 0 = standard processing. */
+  q: number[]
+}
+
+/** detections/index.json: the years available per region, with counts per satellite [AQUA, SNPP, NOAA20]. */
+export interface DetectionsIndex {
+  /** 2 since FRP is stored in 0.1 MW (1 stored whole MW). */
+  schema_version: 2
+  last_day: string
+  satellites: string[]
+  regions: Record<string, Record<string, [number, number, number]>>
+}

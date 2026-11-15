@@ -2,6 +2,7 @@
 import type { Basemap, DrawTool } from '../components/GlobeMap'
 import type { Area } from '../lib/area'
 import type { Outlines } from '../lib/data'
+import { DETECTIONS_OFF, type DetectionsState } from '../lib/detections'
 import type { PaletteId } from '../lib/colorScale'
 import { addMonths, type YearMonth } from '../lib/months'
 import type { Manifest, SeriesKey } from '../lib/types'
@@ -21,6 +22,8 @@ export interface AppState {
   basemap: Basemap
   labels: boolean
   view: View
+  /** The raw detections layer at native pixel size (off by default). */
+  detections: DetectionsState
 }
 
 export type Action =
@@ -33,6 +36,7 @@ export type Action =
   | { type: 'setBasemap'; basemap: Basemap }
   | { type: 'setLabels'; labels: boolean }
   | { type: 'setView'; view: View }
+  | { type: 'setDetections'; detections: DetectionsState }
   | { type: 'applyUrl'; manifest: Manifest; outlines: Outlines | null; url: UrlState }
 
 /** The latest finished month. A month-to-date total is not comparable with full months, so we don't default to it. */
@@ -52,6 +56,7 @@ export function initialState(m: Manifest): AppState {
     basemap: 'day',
     labels: true,
     view: 'explore',
+    detections: DETECTIONS_OFF,
   }
 }
 
@@ -66,6 +71,7 @@ export function reducer(s: AppState, a: Action): AppState {
     case 'setBasemap': return { ...s, basemap: a.basemap }
     case 'setLabels': return { ...s, labels: a.labels }
     case 'setView': return { ...s, view: a.view }
+    case 'setDetections': return { ...s, detections: a.detections }
     case 'applyUrl': return applyUrl(a.manifest, a.outlines, a.url, s)
   }
 }

@@ -20,6 +20,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
       <div className="notice">
         This is a historical record of satellite detections, not a warning system. For current fires see the{' '}
         <a href="https://firms.modaps.eosdis.nasa.gov/map/">NASA FIRMS Fire Map</a>; for official warnings follow your local authorities.
+        Not for tactical decisions during a fire.
       </div>
 
       <h2>Why the record needs harmonizing</h2>
@@ -27,7 +28,8 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
         Aqua MODIS has watched fires since July 2002 with 1 km pixels. VIIRS, on Suomi NPP (from 2012) and NOAA-20 (from 2018), has 375 m pixels
         and sees much smaller fires, so it reports several times more. Aqua's orbit has drifted later in the day since July 2021, so it can no longer carry
         the record on its own. Joining the raw counts where the record changes satellite makes a false jump of 3.3 to 5.4 times in yearly fire activity
-        (the team's figure 2). This record converts VIIRS to the Aqua MODIS scale instead, so 2025 can be compared with 2005.
+        (the team's comparison of the harmonized and naively joined records; the Sensors panel shows the jump for each region).
+        This record converts VIIRS to the Aqua MODIS scale instead, so 2025 can be compared with 2005.
       </p>
 
       <h2>The unit: fire cell-days</h2>
@@ -65,7 +67,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
         </li>
         {v.seams.map((s) => (
           <li key={s.seam}>
-            No step where the record switches ({s.seam}): {pct(s.step_pct)} (90% range {pct(s.lo90_pct)} to {pct(s.hi90_pct)}){s.no_step ? ', which includes zero' : ''}.
+            No clear step where the record switches ({s.seam}): {pct(s.step_pct)} (90% range {pct(s.lo90_pct)} to {pct(s.hi90_pct)}){s.no_step ? ', which includes zero' : ''}.
           </li>
         ))}
         <li>Running NOAA-20 alone through the chain gives {v.chain_ratio.toFixed(3)} times the S-NPP route over July 2021 to October 2026, so the record is safe after S-NPP ends.</li>
@@ -79,6 +81,11 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
         with its 90% range. For a shape you draw, the app adds up the cells inside it: the raw sensor counts are exact; the harmonized number is an estimate
         (the region's conversion applied to part of it) and has no 90% range. Cells are drawn as squares around their centres; region outlines are simplified for the web.
       </p>
+      <p>
+        An optional layer (Layers, "Detections at native pixel size") shows every cleaned detection instead, coloured by satellite and sized like its pixel
+        when zoomed in. It is the raw data before harmonizing: VIIRS sees many more, smaller fires than Aqua MODIS, so the dots are not comparable between sensors.
+        The Download panel offers the same detections as a CSV, one row per hotspot, with its UTC time, satellite, confidence and fire radiative power.
+      </p>
 
       <h2>How the comparisons work</h2>
       <ul>
@@ -86,11 +93,13 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
         <li>Typical: the median of the baseline years. Difference: (value − median) / median; for medians below 5 the app shows the plain difference. Robust z: (value − median) / (1.4826 × median absolute deviation).</li>
         <li>Percentile: the share of baseline years at or below the value. Verdict words: below 10th "well below", 10th to 25th "below", 25th to 75th "near typical", 75th to 90th "above", over 90th "well above". A value within half a fire cell-day of the median is "near typical" whatever its percentile (in quiet months many years tie at 0). The number is always shown next to the words.</li>
         <li>The unfinished month ({m.last_month}, data to {m.last_day}) is compared with the same days in earlier years, never with whole months.</li>
+        <li>Not compared at all: months with days when no satellite flew (July to September 2002), and raw Aqua MODIS from July 2021, when its orbit had drifted. Raw Aqua comparisons for earlier months leave the drifted years out of the baseline; raw S-NPP and NOAA-20 are compared only with the years they flew.</li>
         <li>Colours: the fire cell ramp is rebuilt from the months you choose, so it always uses the whole ramp. Region tints show the verdict for the last chosen month.</li>
       </ul>
 
       <h2>Limits</h2>
       <ul>
+        <li>Each FIRMS detection (hotspot) is a thermal anomaly: a satellite pixel flagged as hotter than its surroundings, usually a fire but not a confirmed one. The cleaning removes volcanoes, industrial sites and other static heat sources, but some non-fire heat can remain.</li>
         <li>Fire cell-days measure observed burning activity, not burned area or number of fires. Zero detections is not "no fire": cloud, smoke and gaps between passes hide fires.</li>
         <li>They measure spread, not intensity: one catastrophic fire fills few cells. Sardinia's July 2021 (the Montiferru fire) ranks 8th of 25 Julys.</li>
         <li>A single converted month is uncertain: half the width of its 90% range is typically about ±35% of the value in California and Sicily and ±75% in mainland Italy, and wider in Sardinia and in quiet months.</li>
@@ -110,7 +119,24 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
 
       <h2>Data and credits</h2>
       <ul>
-        <li>Fire detections: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>, MODIS Collection 6.1 (Aqua) and VIIRS 375 m (Suomi NPP, NOAA-20).</li>
+        <li>
+          Fire detections: <a href="https://firms.modaps.eosdis.nasa.gov/">NASA FIRMS</a>, MODIS Collection 6.1 (Aqua) and VIIRS 375 m (Suomi NPP, NOAA-20).
+          Standard data come from the swath products MYD14 C6.1 (<a href="https://doi.org/10.5067/MODIS/MYD14.061">doi:10.5067/MODIS/MYD14.061</a>),
+          VNP14IMG v2 (<a href="https://doi.org/10.5067/VIIRS/VNP14IMG.002">doi:10.5067/VIIRS/VNP14IMG.002</a>) and VJ114IMG v2
+          (<a href="https://doi.org/10.5067/VIIRS/VJ114IMG.002">doi:10.5067/VIIRS/VJ114IMG.002</a>); near real-time data from MCD14DL C6.1
+          (<a href="https://doi.org/10.5067/FIRMS/MODIS/MCD14DL.NRT.0061">doi:10.5067/FIRMS/MODIS/MCD14DL.NRT.0061</a>), VNP14IMGT
+          (<a href="https://doi.org/10.5067/FIRMS/VIIRS/VNP14IMGT_NRT.002">doi:10.5067/FIRMS/VIIRS/VNP14IMGT_NRT.002</a>) and VJ114IMGT
+          (<a href="https://doi.org/10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002">doi:10.5067/FIRMS/VIIRS/VJ114IMGT_NRT.002</a>).
+        </li>
+        <li>
+          We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS)
+          (<a href="https://earthdata.nasa.gov/firms">https://earthdata.nasa.gov/firms</a>), part of NASA's Land, Atmosphere Near real-time Capability for
+          Earth observations (LANCE) (<a href="https://earthdata.nasa.gov/lance">https://earthdata.nasa.gov/lance</a>) and NASA's Earth Science Data and
+          Information System (ESDIS).
+        </li>
+        <li>
+          FIRMS data are provided "as is", without warranty of any kind (see the FIRMS site above). Fire detections can be missed or misplaced, so this record is not for tactical decisions during a fire.
+        </li>
         <li>Region outlines: Italian regions from ISTAT (via openpolis/geojson-italy), California from the US Census Bureau (TIGER 2010), neighbouring countries from Natural Earth.</li>
         <li>Globe imagery: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a> (Blue Marble, Black Marble).</li>
         <li>Borders and place names: <a href="https://openfreemap.org">OpenFreeMap</a>, © <a href="https://www.openmaptiles.org/">OpenMapTiles</a>, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors.</li>

@@ -16,6 +16,8 @@ export interface UrlState {
   to?: YearMonth
   source?: SeriesKey
   view?: View
+  /** The native pixel detections layer: true with det=1, false for a full link without it, absent when the link does not say. */
+  detections?: boolean
 }
 
 const YM = /^\d{4}-(0[1-9]|1[0-2])$/
@@ -34,8 +36,13 @@ export function parseHash(hash: string): UrlState {
   if (from && YM.test(from)) out.from = from
   if (to && YM.test(to)) out.to = to
   const src = q.get('src')
-  if (src && (SERIES_KEYS as readonly string[]).includes(src)) out.source = src as SeriesKey
+  // An unknown src falls back to the harmonized record rather than keeping whatever was shown before.
+  if (src) out.source = (SERIES_KEYS as readonly string[]).includes(src) ? src as SeriesKey : 'harmonized'
   if (q.get('view') === 'about') out.view = 'about'
+  // Links made by toHash always carry src, and det=1 only while the layer is on, so a full link without det turns the
+  // layer off. A hand-typed link without src leaves the layer as it was.
+  if (q.get('det') === '1') out.detections = true
+  else if (src) out.detections = false
   return out
 }
 
@@ -49,6 +56,7 @@ export function toHash(s: AppState): string {
   q.set('to', s.to)
   q.set('src', s.source)
   if (s.view === 'about') q.set('view', 'about')
+  if (s.detections.show) q.set('det', '1')
   return '#' + q.toString().replace(/%3A/g, ':').replace(/%2C/g, ',')
 }
 
@@ -65,5 +73,6 @@ export function applyUrl(m: Manifest, outlines: Outlines | null, u: UrlState, ba
     to: from <= to ? to : from,
     source: u.source ?? base.source,
     view: u.view ?? base.view,
+    detections: u.detections === undefined ? base.detections : { ...base.detections, show: u.detections },
   }
 }

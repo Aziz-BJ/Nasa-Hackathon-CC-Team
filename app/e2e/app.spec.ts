@@ -160,6 +160,52 @@ test.describe('app', () => {
     await expect(page.locator('#drawer')).toContainText('inside the 90% ranges')
   })
 
+  test('the native pixel layer shows raw detections by satellite, with a key', async ({ page }) => {
+    await page.goto('/#area=region:sardinia&from=2021-07&to=2021-08&src=harmonized')
+    await expect(selection(page)).toContainText('Sardinia')
+    await openPanel(page, 'Layers')
+    const sats = page.getByLabel('Aqua MODIS (1 km pixels)')
+    await expect(sats).toBeDisabled()
+    await page.getByLabel('Show every detection at its real pixel size').check()
+    await expect(sats).toBeEnabled()
+    const key = page.locator('.legend-detections')
+    await expect(key).toContainText('raw, not harmonized')
+    await expect(key).toContainText(/S-NPP VIIRS \(375 m\): [1-9]/)
+    await expect(page).toHaveURL(/det=1/)
+    await sats.uncheck()
+    await expect(key).toContainText('(hidden)')
+    expect((await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => v.id)).toEqual([])
+    // A link made with the layer off, pasted into this tab, turns it off.
+    await page.evaluate(() => { window.location.hash = 'area=region:sardinia&from=2021-07&to=2021-08&src=harmonized' })
+    await expect(key).toHaveCount(0)
+    await expect(page).not.toHaveURL(/det=1/)
+  })
+
+  test('hotspots CSV: one row per detection in the search, with the FIRMS credit', async ({ page }) => {
+    await page.goto('/#area=region:sardinia&from=2021-07&to=2021-07&src=harmonized')
+    await expect(selection(page)).toContainText('Sardinia')
+    await openPanel(page, 'Download')
+    const [dl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download hotspots CSV' }).click()])
+    expect(dl.suggestedFilename()).toBe('hotspots_sardinia_2021-07_2021-07.csv')
+    const text = readFileSync((await dl.path())!, 'utf8')
+    expect(text).toContain("We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS)")
+    expect(text).toContain('NOT harmonized')
+    // 67 Aqua + 806 S-NPP + 696 NOAA-20, checked against the source parquet with DuckDB.
+    expect(text.split('\n').filter((l) => /^\d+\.\d{4},/.test(l))).toHaveLength(1569)
+    await expect(page.locator('#drawer')).toContainText('Saved 1,569 hotspots.')
+  })
+
+  test('an incomplete month and drifted raw Aqua get numbers but no verdict', async ({ page }) => {
+    await expect(page).toHaveTitle(/Spark 1/)
+    await page.goto('/#area=region:sicily&from=2002-07&to=2002-08&src=harmonized')
+    await expect(headline(page)).toContainText('incomplete month, no verdict')
+    await page.goto('/#area=region:sicily&from=2022-01&to=2022-08&src=modis')
+    await expect(headline(page)).toContainText('no verdict (Aqua orbit drift)')
+    await page.getByRole('button', { name: 'More info' }).click()
+    await expect(page.locator('.caption').first()).toContainText('Not compared with earlier years.')
+    await expect(page.locator('#kpi-title').locator('..')).not.toContainText('busiest of')
+  })
+
   test('no automatic accessibility violations', async ({ page }) => {
     const scan = async () => (await new AxeBuilder({ page }).exclude('.globe').analyze()).violations.map((v) => `${v.id}: ${v.help}`)
     expect(await scan()).toEqual([])

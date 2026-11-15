@@ -13,6 +13,7 @@ import { ExportButton } from './components/ExportButton'
 import { FactorTable } from './components/FactorTable'
 import { GlobeMap } from './components/GlobeMap'
 import { diff, KpiRow } from './components/KpiRow'
+import { DetectionsLegend } from './components/DetectionsLegend'
 import { CompactLegend, Legend, VerdictKey } from './components/Legend'
 import { MockBanner } from './components/MockBanner'
 import { OverlapChart } from './components/OverlapChart'
@@ -33,12 +34,13 @@ import { areaFromRegion, validateDrawn } from './lib/area'
 import { buildCountScale, fmtCount, VERDICT_COLORS } from './lib/colorScale'
 import { buildCsv, csvFilename } from './lib/csv'
 import type { Outlines } from './lib/data'
+import { hotspotsCsv, hotspotsFilename, selectDetections, yearsToLoad } from './lib/detections'
 import { saveFile } from './lib/download'
 import { calendarMedians, compareWith, summarizeMonth, summarizeMtd, VERDICT_LABELS, yearToDate, type MonthSummary, type VerdictLevel } from './lib/indices'
 import { cellsToFeatures, EMPTY_FC, regionsToFeatures } from './lib/mapFeatures'
 import { labelYm, longLabelYm, monthRange, MONTH_LONG, parseYm, type YearMonth } from './lib/months'
-import { monthIndex, monthStatus, sensorsIn, sourceCode, sourceOf } from './lib/status'
-import { SERIES_LABELS, type Manifest, type RegionsFile, type ReportedFile, type SeriesKey } from './lib/types'
+import { comparableValues, monthIndex, monthStatus, noVerdictReason, sensorsIn, sourceCode, sourceOf } from './lib/status'
+import { SERIES_LABELS, type DetectionsFile, type DetectionsIndex, type Manifest, type RegionsFile, type ReportedFile, type SeriesKey } from './lib/types'
 import { initialState, reducer, type AppState } from './state/appState'
 import { applyUrl, parseHash, toHash } from './state/urlState'
 
@@ -63,6 +65,8 @@ interface Panel extends FeatureBox {
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`
 const VERDICT_ORDER: VerdictLevel[] = ['well-below', 'below', 'typical', 'above', 'well-above']
 const NO_VERDICT_COLOR = '#8e8e93'
+/** Stable empty list, so the detections memo does not rerun on every render. */
+const NO_DETECTION_FILES: DetectionsFile[] = []
 
 /** "1–13 November 2026" for the unfinished month, "October 2026" otherwise. */
 function focusLabelOf(m: Manifest, ym: YearMonth): string {
@@ -80,7 +84,9 @@ function compareMonth(m: Manifest, series: AreaSeries, key: SeriesKey, ym: YearM
     // Only the harmonized record has month-to-date values for past years.
     return key === 'harmonized' && series.mtd ? summarizeMtd(series.mtd, ym, m.baseline_years) : compareWith(ym, values[monthIndex(m, ym)], null)
   }
-  return summarizeMonth(values, series.months, ym, m.baseline_years)
+  // Incomplete months and drifted raw Aqua keep their value but are not compared at all (no verdict, rank or median).
+  if (noVerdictReason(m, key, ym)) return compareWith(ym, values[monthIndex(m, ym)], null)
+  return summarizeMonth(comparableValues(key, series.months, values), series.months, ym, m.baseline_years)
 }
 
 function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest; rf: RegionsFile; outlines: Outlines | null; reported: ReportedFile | null }) {
@@ -136,6 +142,55 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
     return { cells: cellsToFeatures(totals, m.cell_km, scale, unit), mapScale: scale }
   }, [data.selection, s.source, i0, i1, s.palette, m.cell_km, unit])
 
+  // Raw detections at native pixel size (optional layer, off by default). Only the files for the regions in view
+  // and the years of the chosen months are loaded; nothing else in the app reads them.
+  const [detIndex, setDetIndex] = useState<DetectionsIndex | null>(null)
+  // A network error (a weak connection) is retried a few times; a missing index (404) means this build has no detections.
+  useEffect(() => {
+    let cancelled = false
+    let timer: number | undefined
+    const load = (attempt: number) => {
+      dataSource.detectionsIndex().then((ix) => { if (!cancelled) setDetIndex(ix) }, () => {
+        if (!cancelled && attempt < 5) timer = window.setTimeout(() => load(attempt + 1), 2000 * attempt)
+      })
+    }
+    load(1)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [])
+  const [detFiles, setDetFiles] = useState<{ key: string; files: DetectionsFile[] } | null>(null)
+  const [detError, setDetError] = useState<string | null>(null)
+  // Bumped by "Try again" in the key, to reload files that failed (the data source does not keep failures).
+  const [detAttempt, setDetAttempt] = useState(0)
+  const detShow = s.detections.show && !!detIndex && !!s.area
+  const detKey = detShow && s.area ? regionsTouching(m, s.area)
+    .flatMap((r) => yearsToLoad(Object.keys(detIndex!.regions[r] ?? {}), s.from, s.to).map((y) => `${r}/${y}`)).join(',') : ''
+  useEffect(() => {
+    setDetError(null)
+    if (!detKey) return
+    let cancelled = false
+    Promise.all(detKey.split(',').map((k) => { const [r, y] = k.split('/'); return dataSource.detections(r, Number(y)) }))
+      .then((files) => { if (!cancelled) setDetFiles({ key: detKey, files }) })
+      .catch((e: unknown) => { if (!cancelled) setDetError(e instanceof Error ? e.message : String(e)) })
+    return () => { cancelled = true }
+  }, [detKey, detAttempt])
+  // No key means no files to load (an area outside every region): an empty selection, not a spinner.
+  const detReady = detKey === '' ? NO_DETECTION_FILES : detFiles?.key === detKey ? detFiles.files : null
+  const detLoading = detShow && detReady === null && !detError
+  const detSelection = useMemo(() => (detShow && s.area && detReady
+    ? selectDetections(detReady, s.area, s.from, s.to, s.detections) : null),
+  [detShow, s.area, s.from, s.to, s.detections, detReady])
+
+  // The hotspots CSV loads the same files as the layer, on demand, whether or not the layer is on.
+  const downloadHotspots = useCallback(async () => {
+    const area = s.area
+    if (!area || !detIndex) return 'Choose an area first.'
+    const keys = regionsTouching(m, area).flatMap((r) => yearsToLoad(Object.keys(detIndex.regions[r] ?? {}), s.from, s.to).map((y) => [r, y] as const))
+    const files = await Promise.all(keys.map(([r, y]) => dataSource.detections(r, y)))
+    const { csv, rows } = hotspotsCsv(m, files, area, s.from, s.to)
+    saveFile(hotspotsFilename(area, s.from, s.to), csv, 'text/csv;charset=utf-8')
+    return `Saved ${rows.toLocaleString('en-GB')} hotspots.`
+  }, [s.area, s.from, s.to, detIndex, m])
+
   // Every region tinted by its verdict for the last chosen month.
   const regionVerdicts = useMemo(() => {
     const out = new Map<string, MonthSummary>()
@@ -170,7 +225,9 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   })()
   const rangeNote = !harmonizedSource ? null : series?.estimate ? 'estimate' as const
     : !range && sourceCode(m, s.to) === 'measured_aqua' ? 'measured' as const : null
-  const ytd = series ? yearToDate(values, series.months, s.to, m.baseline_years) : null
+  // Why the last chosen month gets no comparison (incomplete month, drifted raw Aqua), or null.
+  const noVerdict = noVerdictReason(m, s.source, s.to)
+  const ytd = series && !noVerdict ? yearToDate(comparableValues(s.source, series.months, values), series.months, s.to, m.baseline_years) : null
   let total: number | null = null
   let monthsWithData = 0
   for (let i = i0; i >= 0 && i <= i1; i++) {
@@ -191,7 +248,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
           onTool={(tool) => dispatch({ type: 'setTool', tool })}
           onRegion={chooseRegion}
           onArea={(area) => { setDrawError(null); dispatch({ type: 'setArea', area }) }} />
-        <AreaSummary area={s.area} data={data} manifest={m} />
+        <AreaSummary area={s.area} data={data} manifest={m} source={s.source} />
       </> },
     { id: 'dates', side: 'left', label: 'Dates', icon: <CalendarBlank aria-hidden />, title: 'Choose months',
       guide: 'Choose the months to look at. Colours rescale to the months you pick.',
@@ -199,8 +256,10 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
         onChange={(from, to) => dispatch({ type: 'setRange', from, to })}
         activity={activity} palette={s.palette} unit={unit} /> },
     { id: 'layers', side: 'left', label: 'Layers', icon: <Stack aria-hidden />, title: 'Layers and colours',
-      guide: 'Switch between the harmonized record and raw Aqua MODIS or VIIRS, and change colours, imagery and labels.',
+      guide: 'Switch between the harmonized record and raw Aqua MODIS or VIIRS, show every raw detection at its real pixel size, and change colours, imagery and labels.',
       body: () => <DisplayOptions source={s.source} scaleTo={s.scaleTo} palette={s.palette} basemap={s.basemap} labels={s.labels}
+        detections={s.detections} detectionsAvailable={!!detIndex}
+        onDetections={(detections) => dispatch({ type: 'setDetections', detections })}
         onSource={(source) => dispatch({ type: 'setSource', source })}
         onScaleTo={(scaleTo) => dispatch({ type: 'setScaleTo', scaleTo })}
         onPalette={(palette) => dispatch({ type: 'setPalette', palette })}
@@ -234,7 +293,8 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
       body: () => !ready ? needsArea : <ReportedChart reported={reportedForArea} months={series.months} detected={series.values.harmonized} from={s.from} to={s.to} /> }] : []),
     { id: 'download', side: 'right', label: 'Download', icon: <DownloadSimple aria-hidden />, title: 'Download and share',
       guide: 'Get the monthly numbers as a CSV with their sources and ranges, or copy a link to this exact view.',
-      body: () => !ready || !s.area ? needsArea : <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1} /> },
+      body: () => !ready || !s.area ? needsArea : <ExportButton manifest={m} area={s.area} series={series} i0={i0} i1={i1}
+        onHotspots={detIndex ? downloadHotspots : undefined} /> },
   ]
   const about: Panel = { id: 'about', side: 'right', wide: true, label: 'About', icon: <Info aria-hidden />, title: 'About and methods',
     guide: '', body: () => <AboutPage manifest={m} /> }
@@ -294,10 +354,11 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
     : <><strong>{focusLabel}</strong>{partial ? ' (so far)' : ''}: {fmtCount(focus.value)} {unit}{rangeText}
         {focus.verdict && focus.percentile !== null
           ? <> · <span className={`verdict verdict-${focus.verdict}`}>{VERDICT_LABELS[focus.verdict]}</span> ({ordinal(Math.round(focus.percentile))} percentile{partial ? ' of the same days' : ''})</>
-          : partial ? ' · not comparable yet' : null}</>
+          : partial ? ' · not comparable yet'
+          : noVerdict ? ` · ${noVerdict.short}` : null}</>
 
   const verdictKey = <VerdictKey title={`Region tint: ${labelYm(s.to)} compared with usual`}
-    colors={VERDICT_ORDER.map((v) => VERDICT_COLORS[v])} labels={['well below', 'below', 'typical', 'above', 'well above']} />
+    colors={[...VERDICT_ORDER.map((v) => VERDICT_COLORS[v]), NO_VERDICT_COLOR]} labels={['well below', 'below', 'typical', 'above', 'well above', 'no verdict']} />
 
   return (
     <div className={m.mock ? 'app has-banner' : 'app'}>
@@ -318,6 +379,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
         })}
         <div className="map-full">
           <GlobeMap area={s.area} cells={cells} regions={regionsFc} tool={s.tool} basemap={s.basemap} labels={s.labels}
+            detections={detSelection?.features} dimCells={detShow}
             onRegionClick={chooseRegion}
             onDrawn={(area) => {
               const err = validateDrawn(area)
@@ -331,12 +393,15 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
           {mapScale
             ? <CompactLegend scale={mapScale} title={`${unit} per ${m.cell_km} km cell, ${labelYm(s.from)} – ${labelYm(s.to)} (colours fit these months)`} />
             : <span className="small muted">{s.area ? `No fire cells in ${labelYm(s.from)} – ${labelYm(s.to)} for this area.` : 'Choose an area to show its fire cells.'}</span>}
+          {detShow && <DetectionsLegend selection={detSelection} state={s.detections} loading={detLoading} error={detError}
+            onRetry={() => setDetAttempt((n) => n + 1)} />}
           {verdictKey}
         </div>}
         more={<>
           {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel} unit={unit}
             focus={focus} focusLabel={focusLabel} focusStatus={monthStatus(m, s.to, s.source)} range={range} rangeNote={rangeNote} rangeSummed={!!series?.bandSummed}
-            ytd={ytd} baselineYears={m.baseline_years} sourceLine={sourceLine} sensorsLine={sensorsLine} />}
+            ytd={ytd} baselineYears={m.baseline_years} sourceLine={sourceLine} sensorsLine={sensorsLine}
+            noVerdictReason={noVerdict?.long} />}
           {ready && s.area && (
             <p>
               <button type="button" className="btn btn-primary"
@@ -345,7 +410,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
               </button>
             </p>
           )}
-          <AreaSummary area={s.area} data={data} manifest={m} />
+          <AreaSummary area={s.area} data={data} manifest={m} source={s.source} />
           <p className="small muted">Colours show satellite fire detections, not fires or burned area. Cell colours are rebuilt for the months you choose, so the full ramp is always used.</p>
         </>} />
       {guide && <GuideTour steps={guideSteps} onClose={closeGuide} />}
@@ -362,6 +427,10 @@ function CellDetail({ ym, series, manifest: m, seriesLabel, source }: {
   const sum = compareMonth(m, series, source, ym)
   const [y0, y1] = m.baseline_years
   const status = monthStatus(m, ym, source)
+  const reason = noVerdictReason(m, source, ym)
+  // The years actually compared (a raw sensor's record starts after the baseline does).
+  const used = sum.baseline?.years ?? []
+  const [b0, b1] = used.length ? [Math.min(...used, parseYm(ym).year), Math.max(...used, parseYm(ym).year)] : [y0, y1]
   const lo = series.low?.[i]
   const hi = series.high?.[i]
   const range = source === 'harmonized' && !series.estimate && sourceCode(m, ym) !== 'measured_aqua' && status !== 'partial'
@@ -371,8 +440,9 @@ function CellDetail({ ym, series, manifest: m, seriesLabel, source }: {
   if (status === 'partial') compare = sum.baseline && sum.value !== null
     ? `So far (to ${m.last_day}): ${fmtCount(sum.value)}; the ${y0}–${y1} median for the same days is ${fmtCount(sum.baseline.median)}. `
     : 'Month to date: not comparable with full months yet. '
+  else if (reason) compare = `${reason.long} `
   else if (sum.rank && sum.baseline && sum.value !== null) {
-    compare = `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${diff(sum.value, sum.baseline.median)} against the ${y0}–${y1} median (${fmtCount(sum.baseline.median)})`
+    compare = `Rank ${sum.rank.rank} of ${sum.rank.of} for this calendar month; ${diff(sum.value, sum.baseline.median)} against the ${b0}–${b1} median (${fmtCount(sum.baseline.median)})`
       + `${sum.percentile !== null ? `, ${ordinal(Math.round(sum.percentile))} percentile` : ''}${sum.z !== null ? `, robust z ${sum.z.toFixed(1)}` : ''}. `
   }
   const from = source === 'harmonized' ? ` Source: ${sourceOf(m, ym)}.` : ''
