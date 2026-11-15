@@ -47,9 +47,11 @@ describe('seriesFromRegions', () => {
     expect(s.values.viirs_noaa20[17]).toBe(561) // 11 * 17 * 3
     expect(s.values.modis[0]).toBe(0) // a sensor that was flying and saw nothing is 0, not null
   })
-  it('sums the month to date with its range, per baseline year', () => {
+  it('sums the month to date with its range, per baseline year; the current year takes the monthly value', () => {
     const s = seriesFromRegions(m, FIX_REGIONS, ['aa', 'bb'])
-    expect(s.mtd).toEqual({ years: [2019, 2020], values: [5, 7], low: [3, 5], high: [7, 9] })
+    const last = s.months.length - 1
+    // 2019 is a past year: the month-to-date file. 2020 is the unfinished month: the monthly record's value and range.
+    expect(s.mtd).toEqual({ years: [2019, 2020], values: [5, s.values.harmonized[last]], low: [3, s.low![last]], high: [7, s.high![last]] })
     expect(seriesFromRegions(m, { ...FIX_REGIONS, mtd: null }, ['aa']).mtd).toBeNull()
   })
 })
@@ -118,15 +120,15 @@ describe('seriesFromCells', () => {
     expect(r.values.viirs_snpp[2]).toBeNull()
     expect(r.values.viirs_noaa20[2]).toBeNull()
   })
-  it('sums the month to date per year, without a range', () => {
-    // c0: 2019 1.5, 2020 2; c1: 2020 0.5; c2: 2020 1
-    expect(s.mtd).toEqual({ years: [2019, 2020], values: [1.5, 3.5], low: null, high: null })
+  it('sums the month to date per year, without a range; the current year takes the monthly value', () => {
+    // c0: 2019 1.5 (2020 is replaced by the cells' value for the unfinished month itself)
+    expect(s.mtd).toEqual({ years: [2019, 2020], values: [1.5, s.values.harmonized[s.months.length - 1]], low: null, high: null })
     expect(seriesFromCells(m, { ...FIX_REGIONS, mtd: null } as RegionsFile, all).mtd).toBeNull()
   })
   it('adds up cells from several regions', () => {
     const both = seriesFromCells(m, FIX_REGIONS, selectCells(areaFromRegion(m, FIX_OUTLINES, 'ab')!, [aa, bb]))
     expect(both.values.harmonized[0]).toBe(14) // 3 + 1 + 10
-    expect(both.mtd?.values).toEqual([1.5, 10.5]) // 2020: 3.5 + 7
+    expect(both.mtd?.values).toEqual([1.5, both.values.harmonized[both.months.length - 1]])
   })
   it('is all zeros (and null before launch) for an empty selection', () => {
     const e = seriesFromCells(m, FIX_REGIONS, { cells: [] })

@@ -122,6 +122,16 @@ for (const g of REGIONS) {
     }
   })
 }
+const ratios: number[] = []
+for (const g of REGIONS) {
+  months.forEach((ym, i) => {
+    const r = byRegion.get(g.id)!.get(ym)!
+    const W = acc.regionW.get(`${g.id}|${i}`) ?? 0
+    if (r.measured_aqua === '' && Number(r.H) > 0 && W > 0) ratios.push(Number(r.H) / W)
+  })
+}
+ratios.sort((a, b) => a - b)
+const q = (p: number) => ratios[Math.round(p * (ratios.length - 1))]
 const mtdScale = new Map<string, number>()
 for (const r of mtdRows) {
   const W = acc.regionMtdW.get(`${r.region}|${r.year}`) ?? 0
@@ -270,7 +280,15 @@ write('manifest.json', {
   days,
   regions: REGIONS.map((g) => {
     const f = outlines.features.find((x) => x.properties?.id === g.id)!
-    return { ...g, bbox: turfBbox(f).map((x) => round(x, 4)), area_km2: Math.round(turfArea(f) / 1e6), cells: cellCount[g.id] }
+    // The box must hold every cell, including Italy's 3 nautical-mile sea margin (cell centre +- half a cell).
+    const [w, s, e, n] = turfBbox(f)
+    const cs = [...acc.cells.values()].filter((c) => c.region === g.id)
+    const pad = 0.05
+    const bbox = [
+      Math.min(w, ...cs.map((c) => c.lon - pad)), Math.min(s, ...cs.map((c) => c.lat - pad)),
+      Math.max(e, ...cs.map((c) => c.lon + pad)), Math.max(n, ...cs.map((c) => c.lat + pad)),
+    ].map((x) => round(x, 4))
+    return { ...g, bbox, area_km2: Math.round(turfArea(f) / 1e6), cells: cellCount[g.id] }
   }),
   groups: [{ id: 'italy', name: 'All of Italy', regions: ['italy_mainland', 'sicily', 'sardinia'] }],
   method: {
@@ -293,4 +311,5 @@ write('manifest.json', {
 console.log(`Wrote ${out}
   ${months.length} months (${months[0]} to ${lastYm}${monthToDate ? `, to ${lastDay}` : ''}), ${REGIONS.length} regions, ${acc.cells.size} fire cells
   measured months rebuilt exactly: ${exactMeasured} of ${measuredMonths}
-  raw counts per satellite equal Pierre's: ${rawOk} of ${REGIONS.length * months.length} region-months`)
+  raw counts per satellite equal Pierre's: ${rawOk} of ${REGIONS.length * months.length} region-months
+  converted months, H / (cells before scaling): n ${ratios.length}, min ${q(0).toFixed(2)}, 5% ${q(0.05).toFixed(2)}, median ${q(0.5).toFixed(2)}, 95% ${q(0.95).toFixed(2)}, max ${q(1).toFixed(2)}`)

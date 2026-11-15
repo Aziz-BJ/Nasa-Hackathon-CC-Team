@@ -16,23 +16,25 @@ export interface SeasonalChartProps {
   /** 90% range of each month, drawn on the focus year when the record has one. */
   low?: (number | null)[] | null
   high?: (number | null)[] | null
+  /** The unfinished month, left out of the year's line (it is not comparable with whole months). */
+  skip?: YearMonth | null
 }
 
-export function SeasonalChart({ months, values, focusYear, baselineYears, seriesLabel, unit, low, high }: SeasonalChartProps) {
+export function SeasonalChart({ months, values, focusYear, baselineYears, seriesLabel, unit, low, high, skip = null }: SeasonalChartProps) {
   const make = useCallback((width: number) => {
     const bands = Array.from({ length: 12 }, (_, i) => {
       const b = sameMonthBaseline(values, months, i + 1, baselineYears, focusYear)
       return b ? { m: i + 1, p10: b.p10, p25: b.p25, med: b.median, p75: b.p75, p90: b.p90 } : null
     }).filter((x) => x !== null)
     const yearLine = (year: number) =>
-      months.map((ym, i) => ({ ...parseYm(ym), v: values[i] }))
-        .filter((x) => x.year === year && x.v !== null)
+      months.map((ym, i) => ({ ...parseYm(ym), ym, v: values[i] }))
+        .filter((x) => x.year === year && x.v !== null && x.ym !== skip)
         .map((x) => ({ m: x.month, v: x.v as number }))
     const focus = yearLine(focusYear)
     const prev = yearLine(focusYear - 1)
     const ranges = low && high
-      ? months.map((ym, i) => ({ ...parseYm(ym), lo: low[i], hi: high[i], v: values[i] }))
-        .filter((x) => x.year === focusYear && x.lo !== null && x.hi !== null && x.hi > x.lo)
+      ? months.map((ym, i) => ({ ...parseYm(ym), ym, lo: low[i], hi: high[i], v: values[i] }))
+        .filter((x) => x.year === focusYear && x.ym !== skip && x.lo !== null && x.hi !== null && x.hi > x.lo)
         .map((x) => ({ m: x.month, lo: x.lo as number, hi: x.hi as number }))
       : []
     return Plot.plot({
@@ -51,7 +53,7 @@ export function SeasonalChart({ months, values, focusYear, baselineYears, series
         Plot.text(focus.slice(-1), { x: 'm', y: 'v', text: () => String(focusYear), dx: 8, textAnchor: 'start', fill: '#ff9f0a', fontWeight: 700 }),
       ],
     })
-  }, [months, values, focusYear, baselineYears, unit, low, high])
+  }, [months, values, focusYear, baselineYears, unit, low, high, skip])
   const [y0, y1] = baselineYears
   return (
     <figure className="card" id="seasons">
@@ -60,6 +62,7 @@ export function SeasonalChart({ months, values, focusYear, baselineYears, series
       <figcaption className="caption">
         Orange: {focusYear}{low && high ? ', with its 90% range where the month is converted from VIIRS' : ''}. Grey: {focusYear - 1}. Dashed white: median of {y0} to {y1} (leaving out {focusYear}).
         Dark band: middle 50% of years. Light band: middle 80% of years. {seriesLabel}.
+        {skip && parseYm(skip).year === focusYear && <> {MONTH_SHORT[parseYm(skip).month - 1]} {focusYear} is not finished and is left out.</>}
       </figcaption>
     </figure>
   )

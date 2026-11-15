@@ -25,12 +25,15 @@ export function useAreaData(ds: DataSource, m: Manifest, rf: RegionsFile, outlin
     // Whole regions have their numbers already; only the map cells still need to load.
     const regionSeries = area.regionIds ? seriesFromRegions(m, rf, area.regionIds) : null
     setState({ status: 'loading', selection: null, series: regionSeries, coverage, error: null })
-    const ids = coverage === 'none' ? [] : regionsTouching(m, area)
+    // Region boxes include the sea-margin cells, which the land outlines leave out, so load them even when the
+    // outline test finds nothing: a shape holding fire cells is covered at least in part.
+    const ids = regionsTouching(m, area)
     Promise.all(ids.map((id) => ds.cells(id)))
       .then((files) => {
         if (!alive) return
         const selection = selectCells(area, files)
-        setState({ status: 'ready', selection, series: regionSeries ?? seriesFromCells(m, rf, selection), coverage, error: null })
+        const cov = coverage === 'none' && selection.cells.length > 0 ? 'partial' : coverage
+        setState({ status: 'ready', selection, series: regionSeries ?? seriesFromCells(m, rf, selection), coverage: cov, error: null })
       })
       .catch((e: unknown) => {
         if (alive) setState({ ...IDLE, series: regionSeries, status: 'error', coverage, error: e instanceof Error ? e.message : String(e) })

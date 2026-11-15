@@ -26,8 +26,8 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
       <p>
         Aqua MODIS has watched fires since July 2002 with 1 km pixels. VIIRS, on Suomi NPP (from 2012) and NOAA-20 (from 2018), has 375 m pixels
         and sees much smaller fires, so it reports several times more. Aqua's orbit has drifted later in the day since July 2021, so it can no longer carry
-        the record on its own. Joining the raw counts makes a false jump of 3 to 5 times in fire activity. This record converts VIIRS to the Aqua MODIS scale
-        instead, so 2025 can be compared with 2005.
+        the record on its own. Joining the raw counts where the record changes satellite makes a false jump of 3.3 to 5.4 times in yearly fire activity
+        (the team's figure 2). This record converts VIIRS to the Aqua MODIS scale instead, so 2025 can be compared with 2005.
       </p>
 
       <h2>The unit: fire cell-days</h2>
@@ -84,7 +84,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
       <ul>
         <li>Baseline: {m.baseline_years[0]} to {m.baseline_years[1]}, same calendar month, leaving out the month's own year.</li>
         <li>Typical: the median of the baseline years. Difference: (value − median) / median; for medians below 5 the app shows the plain difference. Robust z: (value − median) / (1.4826 × median absolute deviation).</li>
-        <li>Percentile: the share of baseline years at or below the value. Verdict words: below 10th "well below", 10th to 25th "below", 25th to 75th "near typical", 75th to 90th "above", over 90th "well above". The number is always shown next to the words.</li>
+        <li>Percentile: the share of baseline years at or below the value. Verdict words: below 10th "well below", 10th to 25th "below", 25th to 75th "near typical", 75th to 90th "above", over 90th "well above". A value within half a fire cell-day of the median is "near typical" whatever its percentile (in quiet months many years tie at 0). The number is always shown next to the words.</li>
         <li>The unfinished month ({m.last_month}, data to {m.last_day}) is compared with the same days in earlier years, never with whole months.</li>
         <li>Colours: the fire cell ramp is rebuilt from the months you choose, so it always uses the whole ramp. Region tints show the verdict for the last chosen month.</li>
       </ul>
@@ -93,7 +93,7 @@ export function AboutPage({ manifest }: { manifest: Manifest }) {
       <ul>
         <li>Fire cell-days measure observed burning activity, not burned area or number of fires. Zero detections is not "no fire": cloud, smoke and gaps between passes hide fires.</li>
         <li>They measure spread, not intensity: one catastrophic fire fills few cells. Sardinia's July 2021 (the Montiferru fire) ranks 8th of 25 Julys.</li>
-        <li>Each converted month carries about ±40% uncertainty in the Italian regions and ±15% in California (the 90% ranges shown).</li>
+        <li>A single converted month is uncertain: half the width of its 90% range is typically about ±35% of the value in California and Sicily and ±75% in mainland Italy, and wider in Sardinia and in quiet months.</li>
         <li>No Terra: the record starts in July 2002 and has no morning pass. July to September 2002 have days with no satellite at all (marked in the calendar).</li>
         <li>Months from {m.nrt_from} use near-real-time data and may change when standard-quality data replace them.</li>
         <li>Clouds are assumed to hide fires equally from satellites passing at the same time; two passes in one day or night count once.</li>

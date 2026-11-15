@@ -38,7 +38,7 @@ export interface AreaSeries {
   high: (number | null)[] | null
   /** The harmonized line is the region's conversion applied to part of it (drawn shapes). */
   estimate: boolean
-  /** low/high add up several regions' ranges, so they are wider than the true range. */
+  /** low/high add up several regions' ranges, so they are usually wider than the true range. */
   bandSummed: boolean
   /** The unfinished month, days 1..N, in every year (harmonized only). */
   mtd: MtdSeries | null
@@ -76,7 +76,25 @@ export function seriesFromRegions(m: Manifest, rf: RegionsFile, ids: string[]): 
       Array.from({ length: n }, (_, y) => ids.reduce((a, id) => a + rf.mtd!.series[id][pick][y], 0))
     mtd = { years: rf.mtd.years, values: sum('values'), low: sum('low'), high: sum('high') }
   }
-  return { months, values, low, high, estimate: false, bandSummed: ids.length > 1, mtd }
+  return withCurrentMonth({ months, values, low, high, estimate: false, bandSummed: ids.length > 1, mtd })
+}
+
+/**
+ * The unfinished month appears twice in Pierre's outputs: in the monthly record and in the month-to-date file
+ * (separate runs, about 1% apart). The app shows the monthly value everywhere, so the month-to-date entry for the
+ * current year is set to it; earlier years keep their month-to-date values for the comparison.
+ */
+function withCurrentMonth(s: AreaSeries): AreaSeries {
+  if (!s.mtd) return s
+  const last = s.months.length - 1
+  const k = s.mtd.years.indexOf(Number(s.months[last].slice(0, 4)))
+  const v = s.values.harmonized[last]
+  if (k < 0 || v === null) return s
+  const pick = (arr: number[] | null, x: number | null | undefined) => (arr && x !== null && x !== undefined ? arr.map((a, i) => (i === k ? x : a)) : arr)
+  return {
+    ...s,
+    mtd: { years: s.mtd.years, values: s.mtd.values.map((a, i) => (i === k ? v : a)), low: pick(s.mtd.low, s.low?.[last]), high: pick(s.mtd.high, s.high?.[last]) },
+  }
 }
 
 /** Regions whose cells could lie inside the area. */
@@ -125,10 +143,10 @@ export function seriesFromCells(m: Manifest, rf: RegionsFile, sel: Selection): A
     }
     if (mtdValues) for (let k = mtdStart[c.index]; k < mtdStart[c.index + 1]; k++) mtdValues[mtdYear[k]] += mtdValue[k]
   }
-  return {
+  return withCurrentMonth({
     months, values, low: null, high: null, estimate: true, bandSummed: false,
     mtd: rf.mtd && mtdValues ? { years: rf.mtd.years, values: mtdValues, low: null, high: null } : null,
-  }
+  })
 }
 
 const ENTRY_OFFSET: Record<SeriesKey, number> = { harmonized: 2, modis: 3, viirs_snpp: 4, viirs_noaa20: 5 }

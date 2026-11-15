@@ -96,7 +96,8 @@ The harmonized value follows Pierre's source rule day by day:
 2. Count each of that satellite's cell-days as 1 (Aqua) or as Pierre's factor for its region, season and day/night (S-NPP → Aqua, or the
    NOAA-20 → Aqua chain).
 3. Scale every region-month so its cells add up exactly to Pierre's `H`. This carries the model's fire-size term, which the factor table
-   leaves out. Before scaling, converted months were within 0.65 to 1.33 of `H` (median 0.99).
+   leaves out. In converted months `H` is 0.47 to 2.11 times the cells' unscaled sum (median 0.93; 90% of the 259 months with `H`
+   above 0 lie between 0.67 and 1.35). The importer prints these figures on every run.
 
 So a whole region always shows Pierre's numbers, and a drawn shape inside a region is an estimate: the region's conversion applied to
 part of it. The app says so and shows no 90% range for drawn shapes.

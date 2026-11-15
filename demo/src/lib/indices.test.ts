@@ -178,3 +178,14 @@ describe('monthlyAnomalies and calendarMedians', () => {
     expect(calendarMedians(series, months, [2010, 2012]).every((v) => v === null)).toBe(true)
   })
 })
+
+describe('verdict near the median', () => {
+  it('calls a tie at 0 near typical, although its at-or-below percentile is 100', () => {
+    const s = compareWith('2020-01', 0, statsOf([2003, 2004, 2005], [0, 0, 0]))
+    expect(s.percentile).toBe(100)
+    expect(s.verdict).toBe('typical')
+  })
+  it('still calls a clear excess well above', () => {
+    expect(compareWith('2020-01', 3, statsOf([2003, 2004, 2005], [0, 0, 0])).verdict).toBe('well-above')
+  })
+})

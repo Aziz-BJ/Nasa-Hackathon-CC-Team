@@ -28,7 +28,7 @@ import { RAMP } from './config'
 import { dataSource } from './dataSource'
 import { useAreaData } from './hooks/useAreaData'
 import { useDataset } from './hooks/useDataset'
-import { cellTotals, regionsTouching, type AreaSeries } from './lib/aggregate'
+import { cellTotals, regionsTouching, seriesFromRegions, type AreaSeries } from './lib/aggregate'
 import { areaFromRegion, validateDrawn } from './lib/area'
 import { buildCountScale, fmtCount, VERDICT_COLORS } from './lib/colorScale'
 import { buildCsv, csvFilename } from './lib/csv'
@@ -139,13 +139,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   // Every region tinted by its verdict for the last chosen month.
   const regionVerdicts = useMemo(() => {
     const out = new Map<string, MonthSummary>()
-    for (const r of m.regions) {
-      const one: AreaSeries = {
-        months: monthRange(m.first_month, m.last_month), values: rf.series[r.id], low: null, high: null, estimate: false, bandSummed: false,
-        mtd: rf.mtd ? { years: rf.mtd.years, values: rf.mtd.series[r.id].values, low: null, high: null } : null,
-      }
-      out.set(r.id, compareMonth(m, one, s.source, s.to))
-    }
+    for (const r of m.regions) out.set(r.id, compareMonth(m, seriesFromRegions(m, rf, [r.id]), s.source, s.to))
     return out
   }, [m, rf, s.source, s.to])
   const regionsFc = useMemo(() => regionsToFeatures(outlines, (id) => {
@@ -158,6 +152,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
     [series, values, m])
 
   const partial = monthStatus(m, s.to, s.source) === 'partial'
+  const unfinished = m.month_to_date ? m.last_month : null
   const focus = series ? compareMonth(m, series, s.source, s.to) : null
   const focusLabel = focusLabelOf(m, s.to)
   const harmonizedSource = s.source === 'harmonized'
@@ -225,8 +220,8 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
       guide: 'This year against a typical year, and every month against the multi-year median.',
       body: () => !ready ? needsArea : <>
         <SeasonalChart months={series.months} values={values} focusYear={parseYm(s.to).year} baselineYears={m.baseline_years} seriesLabel={seriesLabel}
-          unit={unit} low={harmonizedSource ? series.low : null} high={harmonizedSource ? series.high : null} />
-        <AnomalyChart months={series.months} values={values} i0={i0} i1={i1} baselineYears={m.baseline_years} seriesLabel={seriesLabel} unit={unit} />
+          unit={unit} low={harmonizedSource ? series.low : null} high={harmonizedSource ? series.high : null} skip={unfinished} />
+        <AnomalyChart months={series.months} values={values} i0={i0} i1={i1} baselineYears={m.baseline_years} seriesLabel={seriesLabel} unit={unit} skip={unfinished} />
       </> },
     { id: 'sensors', side: 'right', wide: true, label: 'Sensors', icon: <Planet aria-hidden />, title: 'MODIS and VIIRS',
       guide: 'Why harmonize: raw MODIS and VIIRS disagree, and splicing them raw makes a false jump. The conversion factors are here too.',
@@ -290,7 +285,9 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
   const closeGuide = () => { markGuideSeen(); setGuide(false) }
 
   const selection = `${s.area?.label ?? 'No area'}, ${labelYm(s.from)} – ${labelYm(s.to)}`
-  const rangeText = range ? ` (90% range ${fmtCount(range[0])}–${fmtCount(range[1])})` : rangeNote === 'estimate' ? ' (estimate for this shape)' : ''
+  const rangeText = range
+    ? series?.bandSummed ? ` (regions' 90% ranges added: ${fmtCount(range[0])}–${fmtCount(range[1])})` : ` (90% range ${fmtCount(range[0])}–${fmtCount(range[1])})`
+    : rangeNote === 'estimate' ? ' (estimate for this shape)' : ''
   const headline: ReactNode = !s.area ? 'Choose an area to begin.'
     : data.coverage === 'none' ? 'No data here: the record covers the four study regions.'
     : !focus || focus.value === null ? `${s.area.label}: loading…`
@@ -338,7 +335,7 @@ function Explorer({ manifest: m, rf, outlines, reported }: { manifest: Manifest;
         </div>}
         more={<>
           {ready && focus && <KpiRow from={s.from} to={s.to} total={total} monthsWithData={monthsWithData} seriesLabel={seriesLabel} unit={unit}
-            focus={focus} focusLabel={focusLabel} focusStatus={monthStatus(m, s.to, s.source)} range={range} rangeNote={rangeNote}
+            focus={focus} focusLabel={focusLabel} focusStatus={monthStatus(m, s.to, s.source)} range={range} rangeNote={rangeNote} rangeSummed={!!series?.bandSummed}
             ytd={ytd} baselineYears={m.baseline_years} sourceLine={sourceLine} sensorsLine={sensorsLine} />}
           {ready && s.area && (
             <p>
@@ -368,7 +365,8 @@ function CellDetail({ ym, series, manifest: m, seriesLabel, source }: {
   const lo = series.low?.[i]
   const hi = series.high?.[i]
   const range = source === 'harmonized' && !series.estimate && sourceCode(m, ym) !== 'measured_aqua' && status !== 'partial'
-    && lo !== null && lo !== undefined && hi !== null && hi !== undefined ? ` (90% range ${fmtCount(lo)}–${fmtCount(hi)})` : ''
+    && lo !== null && lo !== undefined && hi !== null && hi !== undefined
+    ? series.bandSummed ? ` (regions' 90% ranges added: ${fmtCount(lo)}–${fmtCount(hi)})` : ` (90% range ${fmtCount(lo)}–${fmtCount(hi)})` : ''
   let compare = ''
   if (status === 'partial') compare = sum.baseline && sum.value !== null
     ? `So far (to ${m.last_day}): ${fmtCount(sum.value)}; the ${y0}–${y1} median for the same days is ${fmtCount(sum.baseline.median)}. `

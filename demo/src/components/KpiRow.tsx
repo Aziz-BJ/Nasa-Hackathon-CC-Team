@@ -27,6 +27,8 @@ export interface KpiRowProps {
   focusStatus: MonthStatus
   /** 90% range of the focus value, when the record has one. */
   range: [number, number] | null
+  /** The range adds several regions' 90% ranges, so it is usually wider than the true range. */
+  rangeSummed?: boolean
   /** "measured" (Aqua months) or "estimate" (drawn shapes), shown when there is no range. */
   rangeNote: 'measured' | 'estimate' | null
   ytd: YearToDate | null
@@ -56,7 +58,7 @@ export function KpiRow(p: KpiRowProps) {
           <div className="small muted">{p.focusLabel}, {STATUS_LABELS[p.focusStatus].toLowerCase()}</div>
           <div className="value">{f.value === null ? 'n/a' : fmtCount(f.value)}</div>
           <div className="small">
-            {p.range ? `90% range ${fmtCount(p.range[0])} to ${fmtCount(p.range[1])}` : p.rangeNote === 'measured' ? 'Measured by Aqua MODIS' : p.rangeNote === 'estimate' ? 'Estimate for this shape' : ''}
+            {p.range ? p.rangeSummed ? `Regions' 90% ranges added: ${fmtCount(p.range[0])} to ${fmtCount(p.range[1])} (usually wider than the true range)` : `90% range ${fmtCount(p.range[0])} to ${fmtCount(p.range[1])}` : p.rangeNote === 'measured' ? 'Measured by Aqua MODIS' : p.rangeNote === 'estimate' ? 'Estimate for this shape' : ''}
           </div>
           {f.verdict && f.percentile !== null
             ? <div><span className={`verdict verdict-${f.verdict}`}>{VERDICT_LABELS[f.verdict]}</span> <span className="small">{ordinal(Math.round(f.percentile))} percentile of {n} {what}</span></div>

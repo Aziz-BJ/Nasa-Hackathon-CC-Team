@@ -63,6 +63,9 @@ export function relativeAnomaly(value: number, reference: number, floor = MIN_DE
   return ((value - reference) / Math.max(reference, floor)) * 100
 }
 
+/** Below this distance from the median (fire cell-days), the verdict is "near typical" whatever the percentile. */
+export const NEAR_MEDIAN = 0.5
+
 /** Share of the baseline years at or below the value, 0-100 (METHOD.md section 8: P = 100 * #{H_y' <= H_y} / |B|). */
 export function percentileOf(value: number, sample: number[]): number {
   if (sample.length === 0) return NaN
@@ -133,7 +136,9 @@ export function compareWith(month: YearMonth, value: number | null, baseline: Ba
     deltaPct: deltaPct(value, baseline.median),
     percentile,
     rank: rankOf(value, baseline.values),
-    verdict: verdictFor(percentile),
+    // The percentile counts ties as "at or below", so 0 against all-zero years is the 100th percentile.
+    // Words follow what a reader would say: under half a fire cell-day from the median is near typical.
+    verdict: Math.abs(value - baseline.median) < NEAR_MEDIAN ? 'typical' : verdictFor(percentile),
     z: robustZ(value, baseline.values),
   }
 }

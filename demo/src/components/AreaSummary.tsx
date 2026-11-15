@@ -13,7 +13,9 @@ export function AreaSummary({ area, data, manifest: m }: { area: Area | null; da
     <div aria-live="polite">
       <p><strong>{area.label}</strong>: {km2} km². {cells}</p>
       {area.regionIds
-        ? <p className="small muted">Numbers come straight from the harmonized record{data.series?.bandSummed ? ', added over the regions' : ''}, with their 90% range.</p>
+        ? <p className="small muted">{data.series?.bandSummed
+          ? "Numbers come straight from the harmonized record, added over the regions. The range shown adds the regions' 90% ranges, so it is usually wider than the true range for the regions together."
+          : 'Numbers come straight from the harmonized record, with its 90% range.'}</p>
         : data.coverage !== 'none' && <p className="small muted">Numbers add up the {m.cell_km} km cells whose centre is inside your shape. The harmonized line is an estimate: the region's conversion applied to part of it, without a 90% range. Raw sensor counts are exact.</p>}
       {data.status === 'loading' && <p className="muted">Loading the fire cells…</p>}
       {data.status === 'error' && <p className="error">Could not load data: {data.error}</p>}

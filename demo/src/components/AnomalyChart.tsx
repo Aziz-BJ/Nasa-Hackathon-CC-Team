@@ -15,15 +15,17 @@ export interface AnomalyChartProps {
   baselineYears: [number, number]
   seriesLabel: string
   unit: string
+  /** The unfinished month, left out: it is only comparable with the same days of earlier years (More info). */
+  skip?: YearMonth | null
 }
 
 const CLIP = 200
 const toDate = (ym: YearMonth) => new Date(`${ym}-01T00:00:00Z`)
 
-export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabel, unit }: AnomalyChartProps) {
+export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabel, unit, skip = null }: AnomalyChartProps) {
   const [reference, setReference] = useState<'mean' | 'median'>('median')
   const make = useCallback((width: number) => {
-    const data = monthlyAnomalies(values, months, i0, i1, baselineYears, reference).map((a) => ({
+    const data = monthlyAnomalies(values, months, i0, i1, baselineYears, reference).filter((a) => a.month !== skip).map((a) => ({
       ...a,
       start: toDate(a.month),
       end: toDate(addMonths(a.month, 1)),
@@ -43,7 +45,7 @@ export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabe
         Plot.ruleY([0], { stroke: '#ffffff' }),
       ],
     })
-  }, [months, values, i0, i1, baselineYears, reference, unit])
+  }, [months, values, i0, i1, baselineYears, reference, unit, skip])
   const [y0, y1] = baselineYears
   return (
     <figure className="card" id="anomalies">
@@ -63,6 +65,7 @@ export function AnomalyChart({ months, values, i0, i1, baselineYears, seriesLabe
       <figcaption className="caption">
         Each bar is one month compared with the same calendar month in {y0} to {y1}, leaving out its own year. Blue: less fire activity than usual. Red: more.
         Bars are cut at +{CLIP}%; hover for the exact value. Months with a typical value below 5 {unit} use 5 as the divisor, so quiet winter months don't swing wildly. {seriesLabel}.
+        {skip && months[i1] === skip && <> {labelYm(skip)} is not finished and is left out; More info compares it with the same days of earlier years.</>}
       </figcaption>
     </figure>
   )

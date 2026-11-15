@@ -97,8 +97,9 @@ describe('areaFromRegion', () => {
     expect(italy.regionIds).toEqual(['italy_mainland', 'sicily', 'sardinia'])
     expect(italy.label).toBe('All of Italy')
     expect(italy.areaKm2).toBe(251219 + 25730 + 24112)
-    expect(italy.bbox[0]).toBeCloseTo(6.6266, 4) // mainland's west edge
-    expect(italy.bbox[1]).toBeCloseTo(35.4936, 4) // Sicily's south edge
+    const box = (id: string) => m.regions.find((r) => r.id === id)!.bbox
+    expect(italy.bbox[0]).toBe(box('italy_mainland')[0]) // mainland's west edge
+    expect(italy.bbox[1]).toBe(box('sicily')[1]) // Sicily's south edge (its sea-margin cells included)
     const sardinia = areaFromRegion(m, outlines, 'sardinia')!
     expect(sardinia.geometry.type).toBe('MultiPolygon')
     expect(sardinia.regionKey).toBe('sardinia')
